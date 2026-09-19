@@ -1,0 +1,44 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <LangVersion>latest</LangVersion>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <NoWarn>$(NoWarn);CS1591</NoWarn>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <PackageId>ArjuyWhatsApp</PackageId>
+    <Version>1.0.0</Version>
+    <Authors>Alejandro Flores</Authors>
+    <Description>Cliente .NET liviano para la API oficial de WhatsApp Cloud API de Meta. Envío de mensajes de texto, plantillas, imágenes y documentos, y descarga de media, vía HttpClient e IOptions, sin dependencias de terceros.</Description>
+    <PackageTags>whatsapp;meta;cloud-api;graph-api;messaging</PackageTags>
+    <RepositoryType>git</RepositoryType>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.Http" Version="8.0.1" />
+    <PackageReference Include="Microsoft.Extensions.Options.ConfigurationExtensions" Version="8.0.0" />
+  </ItemGroup>
+
+  <!--
+    FrameworkReference (no PackageReference) al shared framework ASP.NET Core: es la forma
+    soportada de usar tipos de Microsoft.AspNetCore.* (IEndpointRouteBuilder, Results, etc.) desde
+    una librería de clases normal (Microsoft.NET.Sdk) SIN convertirla al SDK Microsoft.NET.Sdk.Web
+    completo — no trae Kestrel, hosting, ni nada que obligue a los consumidores no-web de esta
+    librería (los métodos VerifyWebhookChallenge/ProcessWebhookAsync no dependen de esto). Solo
+    aporta los tipos necesarios para WebhookEndpointExtensions.MapArjuyWhatsAppWebhook.
+  -->
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="..\README.md" Pack="true" PackagePath="\" />
+  </ItemGroup>
+
+</Project>

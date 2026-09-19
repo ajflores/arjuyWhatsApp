@@ -1,0 +1,584 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ArjuyWhatsApp — De cero al primer mensaje real</title>
+<style>
+  :root {
+    --bg: #0f1220;
+    --panel: #171b2e;
+    --panel-2: #1e2338;
+    --border: #2b3152;
+    --text: #e7e9f5;
+    --text-dim: #a8adc9;
+    --accent: #5b8cff;
+    --accent-2: #8b6bff;
+    --ok: #3ecf8e;
+    --warn: #ffb454;
+    --err: #ff6b6b;
+    --code-bg: #0b0e1a;
+    --code-border: #2b3152;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    padding: 0 16px;
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    line-height: 1.6;
+  }
+
+  .wrap {
+    max-width: 900px;
+    margin: 0 auto;
+    padding-block: 40px 80px;
+  }
+
+  header.hero {
+    text-align: center;
+    padding: 32px 24px 40px;
+    margin-bottom: 32px;
+    border-radius: 16px;
+    background: linear-gradient(160deg, var(--panel-2), var(--panel));
+    border: 1px solid var(--border);
+  }
+
+  header.hero h1 {
+    margin: 0 0 12px;
+    font-size: clamp(1.5rem, 4vw, 2.1rem);
+    background: linear-gradient(90deg, var(--accent), var(--accent-2));
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+
+  header.hero p {
+    margin: 0;
+    color: var(--text-dim);
+    font-size: 1.02rem;
+  }
+
+  nav.toc {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px 24px;
+    margin-bottom: 40px;
+  }
+
+  nav.toc h2 {
+    margin-top: 0;
+    font-size: 1rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--text-dim);
+  }
+
+  nav.toc ol {
+    margin: 0;
+    padding-left: 20px;
+    columns: 2;
+    column-gap: 24px;
+  }
+
+  nav.toc li { margin-bottom: 8px; break-inside: avoid; }
+  nav.toc a { color: var(--accent); text-decoration: none; }
+  nav.toc a:hover { text-decoration: underline; }
+
+  section {
+    margin-bottom: 48px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  section:last-of-type { border-bottom: none; }
+
+  .step-header {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    margin-bottom: 16px;
+  }
+
+  .step-number {
+    flex: 0 0 auto;
+    width: 40px;
+    height: 40px;
+    border-radius: 10px;
+    background: linear-gradient(160deg, var(--accent), var(--accent-2));
+    color: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    font-size: 1.1rem;
+  }
+
+  h2 { margin: 0; font-size: 1.35rem; }
+  h3 { font-size: 1.1rem; color: var(--text); margin-top: 28px; }
+
+  p { color: var(--text-dim); }
+  strong { color: var(--text); }
+
+  .callout {
+    border-radius: 10px;
+    padding: 14px 18px;
+    margin: 16px 0;
+    border: 1px solid var(--border);
+    background: var(--panel);
+  }
+
+  .callout.tip { border-left: 4px solid var(--accent); }
+  .callout.warn { border-left: 4px solid var(--warn); }
+  .callout.error { border-left: 4px solid var(--err); }
+  .callout.success { border-left: 4px solid var(--ok); }
+
+  .callout .label {
+    display: block;
+    font-weight: 700;
+    font-size: 0.78rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-bottom: 6px;
+  }
+
+  .callout.tip .label { color: var(--accent); }
+  .callout.warn .label { color: var(--warn); }
+  .callout.error .label { color: var(--err); }
+  .callout.success .label { color: var(--ok); }
+
+  figure {
+    margin: 20px 0;
+  }
+
+  figure img {
+    max-width: 100%;
+    display: block;
+    border-radius: 10px;
+    border: 1px solid var(--border);
+    box-shadow: 0 6px 24px rgba(0,0,0,0.35);
+  }
+
+  figcaption {
+    margin-top: 8px;
+    font-size: 0.88rem;
+    color: var(--text-dim);
+    text-align: center;
+  }
+
+  pre {
+    background: var(--code-bg);
+    border: 1px solid var(--code-border);
+    border-radius: 10px;
+    padding: 16px 18px;
+    overflow-x: auto;
+    margin: 16px 0;
+  }
+
+  code {
+    font-family: "SF Mono", Consolas, "Cascadia Code", Menlo, monospace;
+    font-size: 0.88rem;
+  }
+
+  pre code {
+    color: #d6dcff;
+  }
+
+  .inline-code {
+    background: var(--panel-2);
+    border: 1px solid var(--border);
+    border-radius: 5px;
+    padding: 1px 6px;
+    font-family: "SF Mono", Consolas, "Cascadia Code", Menlo, monospace;
+    font-size: 0.88em;
+    color: #cddcff;
+  }
+
+  ol, ul {
+    color: var(--text-dim);
+    padding-left: 22px;
+  }
+
+  ol li, ul li { margin-bottom: 6px; }
+
+  .badge {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    padding: 2px 8px;
+    border-radius: 999px;
+    margin-left: 8px;
+    vertical-align: middle;
+  }
+
+  .badge.error { background: rgba(255,107,107,0.15); color: var(--err); border: 1px solid rgba(255,107,107,0.4); }
+  .badge.success { background: rgba(62,207,142,0.15); color: var(--ok); border: 1px solid rgba(62,207,142,0.4); }
+
+  footer {
+    text-align: center;
+    color: var(--text-dim);
+    font-size: 0.85rem;
+    margin-top: 40px;
+    padding-top: 24px;
+    border-top: 1px solid var(--border);
+  }
+
+  @media (max-width: 600px) {
+    nav.toc ol { columns: 1; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="hero">
+    <h1>ArjuyWhatsApp: de la app en Meta al primer mensaje real</h1>
+    <p>Tutorial paso a paso, con capturas reales del proceso completo — errores incluidos.</p>
+  </header>
+
+  <nav class="toc">
+    <h2>Contenido</h2>
+    <ol>
+      <li><a href="#paso-0">Crear la app en Meta for Developers</a></li>
+      <li><a href="#paso-1">Paso 1: Probar</a></li>
+      <li><a href="#paso-2">Generar el Access Token temporal</a></li>
+      <li><a href="#paso-3">Cargar la config en appsettings.Development.json</a></li>
+      <li><a href="#paso-4">Primera prueba de envío con breakpoint</a></li>
+      <li><a href="#paso-5">Levantar ngrok</a></li>
+      <li><a href="#paso-6">Configurar el webhook en Meta (Paso 2)</a></li>
+      <li><a href="#paso-7">Suscribirse al campo messages</a></li>
+      <li><a href="#paso-8">Prueba de recepción real</a></li>
+      <li><a href="#paso-9">Apéndice: Controller manual</a></li>
+    </ol>
+  </nav>
+
+  <section id="paso-0">
+    <div class="step-header">
+      <div class="step-number">0</div>
+      <h2>Crear la app en Meta for Developers</h2>
+    </div>
+    <p>
+      Antes de tocar código, hace falta una app registrada en
+      <strong>developers.facebook.com/apps</strong>. Los pasos previos a la primera captura:
+    </p>
+    <ol>
+      <li>Entrar a <strong>Meta for Developers</strong> con la cuenta de Facebook y hacer clic en <strong>Crear app</strong>.</li>
+      <li>Elegir el tipo de app <strong>Business</strong> (es el único tipo que expone los productos de WhatsApp Business Platform).</li>
+      <li>Completar nombre de la app y cuenta de negocio asociada (o crear una nueva desde el mismo asistente).</li>
+      <li>Dentro del panel de la app, en <strong>Agregar productos</strong>, buscar <strong>WhatsApp</strong> y hacer clic en <strong>Configurar</strong>.</li>
+      <li>Meta te lleva automáticamente a <strong>Configuración básica → Paso 1. Probar</strong>, que es donde arranca la primera captura de este tutorial.</li>
+    </ol>
+    <div class="callout tip">
+      <span class="label">Tip</span>
+      Meta crea un número de prueba (test number) automáticamente, sin costo, para que puedas mandar mensajes sin verificar un número real todavía. Es el que aparece en la próxima captura.
+    </div>
+  </section>
+
+  <section id="paso-1">
+    <div class="step-header">
+      <div class="step-number">1</div>
+      <h2>Paso 1: Probar</h2>
+    </div>
+    <p>
+      En esta pantalla Meta ya generó el número de prueba y expone dos identificadores clave que
+      vas a necesitar para configurar <strong>ArjuyWhatsApp</strong>: el <strong>Phone Number ID</strong>
+      y el <strong>WhatsApp Business Account ID</strong>. Ambos están tapados en la captura porque
+      son datos reales de la cuenta de prueba.
+    </p>
+    <figure>
+      <img src="screenshots/01-paso1-probar.png" alt="Paso 1 Probar en Meta for Developers, con Phone Number ID y Business Account ID redactados">
+      <figcaption>Paso 1. Probar — número de test, Phone Number ID y Business Account ID (redactados).</figcaption>
+    </figure>
+    <p>
+      Estos dos valores van directo a la configuración de la librería: <span class="inline-code">PhoneNumberId</span>
+      y <span class="inline-code">BusinessAccountId</span>. Todavía no hace falta generar el
+      Access Token — eso es el siguiente paso.
+    </p>
+  </section>
+
+  <section id="paso-2">
+    <div class="step-header">
+      <div class="step-number">2</div>
+      <h2>Generar el Access Token temporal</h2>
+    </div>
+    <p>
+      Con el botón <strong>Generar identificador</strong> (o <strong>Generar nuevo identificador</strong> si ya
+      había uno) Meta emite un <strong>Access Token temporal</strong>, válido por <strong>24 horas</strong>.
+      Es el que se usa para las primeras pruebas — para producción hace falta un token de sistema
+      permanente, pero eso es tema de otro tutorial.
+    </p>
+    <figure>
+      <img src="screenshots/02-token-generado.png" alt="Token de acceso generado en Meta for Developers, campo y bloque curl redactados">
+      <figcaption>Identificador de acceso ya generado. El campo de texto y el bloque <code>curl</code> de ejemplo (que repite el token en el header Authorization) están redactados.</figcaption>
+    </figure>
+    <div class="callout warn">
+      <span class="label">Ojo</span>
+      Cada vez que volvés a esta pantalla y volvés a generar el token, el anterior se invalida. Si el envío de prueba te empieza a fallar con 401, probablemente el token venció o se regeneró.
+    </div>
+  </section>
+
+  <section id="paso-3">
+    <div class="step-header">
+      <div class="step-number">3</div>
+      <h2>Cargar la config en appsettings.Development.json</h2>
+    </div>
+    <p>
+      Con los tres datos (<span class="inline-code">AccessToken</span>, <span class="inline-code">PhoneNumberId</span>,
+      <span class="inline-code">BusinessAccountId</span>) ya se puede completar la sección
+      <span class="inline-code">ArjuyWhatsApp</span> del <span class="inline-code">appsettings.Development.json</span>
+      del proyecto <strong>ArjuyWhatsApp.Sample.Api</strong>.
+    </p>
+    <figure>
+      <img src="screenshots/03-appsettings-development.png" alt="appsettings.Development.json en Visual Studio con los valores reales redactados">
+      <figcaption>appsettings.Development.json en Visual Studio — AccessToken, PhoneNumberId y BusinessAccountId redactados.</figcaption>
+    </figure>
+    <p>
+      <strong>¿Por qué <span class="inline-code">appsettings.Development.json</span> y no
+      <span class="inline-code">appsettings.json</span>?</strong> Porque el
+      <span class="inline-code">.Development.json</span> está en el <span class="inline-code">.gitignore</span>
+      del proyecto (o debería estarlo) — es el lugar pensado para secretos y configuración local que
+      nunca se commitea. El <span class="inline-code">appsettings.json</span> normal sí va al repo, y
+      por eso trae placeholders como <span class="inline-code">REEMPLAZAR_CON_TU_APP_SECRET</span> en
+      lugar de valores reales.
+    </p>
+    <pre><code>{
+  "ArjuyWhatsApp": {
+    "AccessToken": "&lt;tu access token temporal&gt;",
+    "PhoneNumberId": "&lt;tu Phone Number ID&gt;",
+    "BusinessAccountId": "&lt;tu Business Account ID&gt;",
+    "AppSecret": "REEMPLAZAR_CON_TU_APP_SECRET",
+    "VerifyToken": "REEMPLAZAR_CON_TU_VERIFY_TOKEN",
+    "ApiVersion": "v21.0"
+  }
+}</code></pre>
+  </section>
+
+  <section id="paso-4">
+    <div class="step-header">
+      <div class="step-number">4</div>
+      <h2>Primera prueba de envío con breakpoint</h2>
+    </div>
+    <p>
+      Antes de confiar en que todo estaba bien conectado, pusimos un breakpoint dentro del método
+      interno <span class="inline-code">SendMessagePayloadAsync</span> — el que arma el
+      <span class="inline-code">HttpRequestMessage</span> y lo manda a la Graph API — para inspeccionar
+      el payload real antes de que saliera y la respuesta real de Meta al volver.
+    </p>
+    <figure>
+      <img src="screenshots/04-breakpoint-sendmessageasync.png" alt="Breakpoint en Visual Studio dentro de SendMessagePayloadAsync, con datatip mostrando el payload">
+      <figcaption>Breakpoint dentro de <code>SendMessagePayloadAsync</code>. El datatip muestra el payload que se está por enviar (número de teléfono redactado).</figcaption>
+    </figure>
+    <p>
+      Al continuar la ejecución, la respuesta cruda de Meta se pudo inspeccionar con el
+      <strong>Text Visualizer</strong> de Visual Studio sobre la variable <span class="inline-code">body</span>:
+    </p>
+    <figure>
+      <img src="screenshots/05-text-visualizer-respuesta.png" alt="Text Visualizer de Visual Studio mostrando la respuesta JSON real de Meta, con números de teléfono redactados">
+      <figcaption>Text Visualizer sobre la respuesta cruda: <code>contacts[].input</code>, <code>contacts[].wa_id</code> (redactados) y el <code>wamid</code> del mensaje enviado.</figcaption>
+    </figure>
+    <p>
+      Y del lado del consumidor, probando el endpoint de ejemplo desde <strong>Swagger UI</strong>
+      (proyecto <strong>ArjuyWhatsApp.Sample.Api</strong>), el resultado fue un
+      <span class="inline-code">MResult&lt;string&gt;</span> exitoso con el <span class="inline-code">wamid</span>
+      del mensaje:
+    </p>
+    <figure>
+      <img src="screenshots/06-swagger-resultado-exitoso.png" alt="Swagger UI mostrando un envío exitoso con MResult y wamid, número de teléfono redactado">
+      <figcaption>Swagger UI — request y response de un envío exitoso vía <code>/api/send/text</code> (número de teléfono redactado).</figcaption>
+    </figure>
+    <div class="callout success">
+      <span class="label">Listo</span>
+      Con esto quedó confirmado el envío saliente: la librería arma bien el payload, la Graph API lo acepta, y el <code>MResult</code> devuelve el <code>wamid</code>. Falta la otra mitad: recibir mensajes entrantes.
+    </div>
+  </section>
+
+  <section id="paso-5">
+    <div class="step-header">
+      <div class="step-number">5</div>
+      <h2>Levantar ngrok</h2>
+    </div>
+    <p>
+      Para que Meta pueda pegarle al webhook, necesita una URL pública — y en desarrollo la app corre
+      en <span class="inline-code">https://localhost:7100</span>. La solución más simple es un túnel
+      con <strong>ngrok</strong>:
+    </p>
+    <pre><code>ngrok http https://localhost:7100</code></pre>
+    <figure>
+      <img src="screenshots/07-ngrok-terminal.png" alt="Terminal de ngrok mostrando la sesión activa y la URL de forwarding, email de cuenta redactado">
+      <figcaption>ngrok corriendo — la fila <code>Forwarding</code> muestra la URL pública que apunta a <code>localhost:7100</code> (email de la cuenta redactado).</figcaption>
+    </figure>
+    <p>
+      La URL que importa es la de <span class="inline-code">Forwarding</span>
+      (algo como <span class="inline-code">https://&lt;subdominio&gt;.ngrok-free.dev</span> → <span class="inline-code">https://localhost:7100</span>).
+      Esa es la base que se usa en el siguiente paso para armar la Callback URL del webhook.
+    </p>
+    <div class="callout tip">
+      <span class="label">Tip</span>
+      En el plan gratuito de ngrok el subdominio cambia cada vez que reiniciás el túnel, así que cada vez que lo reiniciás hay que volver a actualizar la Callback URL en Meta.
+    </div>
+  </section>
+
+  <section id="paso-6">
+    <div class="step-header">
+      <div class="step-number">6</div>
+      <h2>Configurar el webhook en Meta (Paso 2)</h2>
+    </div>
+    <p>
+      En <strong>Paso 2. Configuración de producción → Configurar Webhooks</strong> hay que cargar dos
+      campos: la <strong>URL de devolución de llamada</strong> (la URL de ngrok + la ruta del endpoint,
+      por ejemplo <span class="inline-code">/api/webhooks/whatsapp</span>) y el
+      <strong>Identificador de verificación</strong> (el mismo valor que <span class="inline-code">VerifyToken</span>
+      en el <span class="inline-code">appsettings.Development.json</span>).
+    </p>
+    <figure>
+      <img src="screenshots/08-webhook-paso2-inicial.png" alt="Vista inicial de Paso 2 Configuración de producción, antes de cargar el webhook">
+      <figcaption>Vista inicial de Paso 2, antes de cargar la Callback URL.</figcaption>
+    </figure>
+
+    <h3>El primer intento falló <span class="badge error">Error</span></h3>
+    <p>
+      Al cargar la URL de ngrok y el verify token y darle a <strong>Verificar y guardar</strong>, Meta
+      devolvió un error genérico de validación:
+    </p>
+    <figure>
+      <img src="screenshots/09-webhook-primer-intento-error.png" alt="Primer intento de configurar el webhook, con error de validación, verify token y nombre de la app redactados">
+      <figcaption>Primer intento: "No se ha podido validar la URL de devolución de llamada ni el identificador de verificación." (verify token redactado)</figcaption>
+    </figure>
+    <div class="callout error">
+      <span class="label">Qué pasó realmente</span>
+      El error no tenía nada que ver con la URL, el token, ni el código. <strong>La app de ArjuyWhatsApp.Sample.Api simplemente no estaba corriendo</strong> en ese momento — Meta intenta pegarle al endpoint <code>GET</code> del webhook para el handshake de verificación, y si no hay nada escuchando del otro lado del túnel de ngrok, la validación falla con este mensaje poco descriptivo. La lección: antes de tocar "Verificar y guardar", confirmá que <code>dotnet run</code> (o F5 en Visual Studio) esté efectivamente corriendo.
+    </div>
+
+    <h3>El segundo intento funcionó <span class="badge success">OK</span></h3>
+    <p>
+      Con la app corriendo y el mismo túnel de ngrok activo, se volvió a intentar exactamente lo mismo:
+    </p>
+    <figure>
+      <img src="screenshots/10-webhook-segundo-intento-exito.png" alt="Segundo intento exitoso de configurar el webhook en Meta">
+      <figcaption>Segundo intento — sin banner de error, la suscripción del webhook queda activa.</figcaption>
+    </figure>
+  </section>
+
+  <section id="paso-7">
+    <div class="step-header">
+      <div class="step-number">7</div>
+      <h2>Suscribirse al campo messages</h2>
+    </div>
+    <p>
+      Configurar la URL del webhook no alcanza: también hay que suscribirse explícitamente al
+      campo <span class="inline-code">messages</span> dentro de <strong>Campos de webhook</strong>
+      (la tabla lista muchísimos campos — <span class="inline-code">account_alerts</span>,
+      <span class="inline-code">calls</span>, <span class="inline-code">flows</span>, etc. — y por
+      defecto ninguno relevante para mensajería está activado).
+    </p>
+    <figure>
+      <img src="screenshots/11-webhook-campos-scroll.png" alt="Lista de campos de webhook disponibles en Meta, buscando el campo messages">
+      <figcaption>Recorriendo la tabla de campos de webhook buscando <code>messages</code>.</figcaption>
+    </figure>
+    <figure>
+      <img src="screenshots/12-webhook-messages-suscrito.png" alt="Campo messages suscrito en la configuración de webhooks de Meta">
+      <figcaption>Campo <code>messages</code> con el toggle <strong>Suscrito</strong> activado — a partir de acá Meta reenvía los mensajes entrantes al webhook.</figcaption>
+    </figure>
+  </section>
+
+  <section id="paso-8">
+    <div class="step-header">
+      <div class="step-number">8</div>
+      <h2>Prueba de recepción real</h2>
+    </div>
+    <p>
+      Con el webhook configurado y suscripto, tocaba probar la recepción real: mandar un WhatsApp
+      desde un celular real al número de prueba y ver si <span class="inline-code">ArjuyWhatsApp</span>
+      lo recibía y disparaba el <span class="inline-code">MessageReceived</span> (o el
+      <span class="inline-code">IWhatsAppMessageHandler</span> registrado por DI).
+    </p>
+    <div class="callout warn">
+      <span class="label">La confusión del momento</span>
+      En un primer momento se volvió a probar el <strong>envío</strong> (Swagger, <code>SendTextAsync</code>) pensando que eso iba a "activar" también la recepción — pero enviar un mensaje desde la API no genera ningún webhook entrante, porque el webhook solo dispara con mensajes que <strong>llegan</strong> al número de WhatsApp, no con los que salen desde él. La confusión se resolvió al caer en la cuenta de que hacía falta mandar un WhatsApp real desde el celular personal hacia el número de prueba (<code>+1 555 161-0903</code> en este caso), no repetir el envío de prueba.
+    </div>
+    <p>
+      Una vez mandado el mensaje real desde el celular, la recepción se confirmó verbalmente en la
+      sesión de trabajo (el breakpoint del lado del webhook se disparó con el payload entrante
+      correcto) — no hizo falta una captura adicional para este paso, ya que fue una verificación
+      puntual en tiempo real.
+    </p>
+  </section>
+
+  <section id="paso-9">
+    <div class="step-header">
+      <div class="step-number">9</div>
+      <h2>Apéndice — usar tu propio Controller en vez de MapArjuyWhatsAppWebhook()</h2>
+    </div>
+    <p>
+      <span class="inline-code">MapArjuyWhatsAppWebhook()</span> registra los dos endpoints
+      (<span class="inline-code">GET</span> de verificación y <span class="inline-code">POST</span>
+      de recepción) con Minimal APIs, delegando en
+      <span class="inline-code">IArjuyWhatsAppClient.VerifyWebhookChallenge</span> y
+      <span class="inline-code">IArjuyWhatsAppClient.ProcessWebhookAsync</span>. Si necesitás lógica
+      adicional en el endpoint — autenticación extra, logging particular, otro status code, etc. —
+      podés escribir tu propio Controller llamando exactamente a los mismos dos métodos:
+    </p>
+    <pre><code>[ApiController]
+[Route("api/webhooks/whatsapp")]
+public class WhatsAppWebhookController : ControllerBase
+{
+    private readonly IArjuyWhatsAppClient _whatsAppClient;
+
+    public WhatsAppWebhookController(IArjuyWhatsAppClient whatsAppClient)
+    {
+        _whatsAppClient = whatsAppClient;
+    }
+
+    // Handshake de verificación que hace Meta al configurar/re-verificar la Callback URL.
+    [HttpGet]
+    public IActionResult Verify(
+        [FromQuery(Name = "hub.mode")] string mode,
+        [FromQuery(Name = "hub.verify_token")] string verifyToken,
+        [FromQuery(Name = "hub.challenge")] string challenge)
+    {
+        var result = _whatsAppClient.VerifyWebhookChallenge(mode, verifyToken, challenge);
+
+        // text/plain, no JSON: Meta exige recibir hub.challenge tal cual, sin envoltorio.
+        return result is null
+            ? StatusCode(StatusCodes.Status403Forbidden)
+            : Content(result, "text/plain");
+    }
+
+    // Recepción de mensajes/eventos entrantes.
+    [HttpPost]
+    public async Task<IActionResult> Receive(CancellationToken cancellationToken)
+    {
+        using var reader = new StreamReader(Request.Body);
+        var rawBody = await reader.ReadToEndAsync(cancellationToken);
+
+        var signatureHeader = Request.Headers["X-Hub-Signature-256"].ToString();
+
+        var result = await _whatsAppClient.ProcessWebhookAsync(rawBody, signatureHeader, cancellationToken);
+
+        // Meta espera un 200 rápido siempre que la firma sea válida, aunque algún mensaje
+        // individual haya fallado río abajo. Solo se responde distinto de 200 cuando
+        // ProcessWebhookAsync falló por firma inválida.
+        return result.IsSuccess
+            ? Ok()
+            : StatusCode(StatusCodes.Status403Forbidden);
+    }
+}</code></pre>
+    <div class="callout tip">
+      <span class="label">Los dos caminos son igual de válidos</span>
+      <span class="inline-code">MapArjuyWhatsAppWebhook()</span> es más corto para el caso común. El Controller manual da control total sobre el pipeline de MVC (filtros, autorización, versionado de rutas, etc.). Ambos terminan llamando exactamente a los mismos dos métodos públicos de <code>IArjuyWhatsAppClient</code> — no hay magia oculta en ninguno de los dos.
+    </div>
+  </section>
+
+  <footer>
+    ArjuyWhatsApp — tutorial armado a partir de una sesión de configuración real, capturas redactadas a nivel de píxel antes de publicar.
+  </footer>
+
+</div>
+</body>
+</html>

@@ -1,0 +1,86 @@
+@page
+@model ArjuyWhatsApp.Sample.Web.Pages.IndexModel
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>ArjuyWhatsApp — Sample Web</title>
+    <link rel="stylesheet" href="~/site.css" />
+</head>
+<body>
+    <div class="container">
+        <h1>ArjuyWhatsApp — Sample Web</h1>
+        <p class="subtitle">
+            Enviá un mensaje de texto y mirá los mensajes recibidos vía webhook (<code>/api/webhooks/whatsapp</code>).
+        </p>
+
+        <section class="card">
+            <h2>Enviar mensaje de texto</h2>
+            <form method="post">
+                <div class="field">
+                    <label asp-for="Input.PhoneNumber">Número (formato internacional, sin "+")</label>
+                    <input asp-for="Input.PhoneNumber" placeholder="5491122334455" required />
+                </div>
+                <div class="field">
+                    <label asp-for="Input.Message">Mensaje</label>
+                    <textarea asp-for="Input.Message" rows="3" placeholder="Hola, esto es una prueba" required></textarea>
+                </div>
+                <button type="submit">Enviar</button>
+            </form>
+
+            @if (Model.SendResult is not null)
+            {
+                if (Model.SendResult.IsSuccess)
+                {
+                    <p class="result result-ok">
+                        Enviado correctamente. Message ID: <code>@Model.SendResult.Data</code>
+                    </p>
+                }
+                else
+                {
+                    <p class="result result-error">
+                        Error al enviar: @Model.SendResult.Message
+                    </p>
+                }
+            }
+        </section>
+
+        <section class="card">
+            <div class="card-header">
+                <h2>Mensajes recibidos</h2>
+                <a href="/" class="button-link">Actualizar</a>
+            </div>
+
+            @if (Model.ReceivedMessages.Count == 0)
+            {
+                <p class="empty">Todavía no llegó ningún mensaje. Configurá el webhook en el panel de Meta apuntando a esta app (ver MANUAL.md sección 3.3) y mandale un WhatsApp al número de prueba.</p>
+            }
+            else
+            {
+                <table>
+                    <thead>
+                        <tr>
+                            <th>De</th>
+                            <th>Tipo</th>
+                            <th>Texto</th>
+                            <th>Fecha</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var message in Model.ReceivedMessages)
+                        {
+                            <tr>
+                                <td>@message.From</td>
+                                <td>@message.Type</td>
+                                <td>@(message.Text ?? "—")</td>
+                                <td>@message.Timestamp.ToString("yyyy-MM-dd HH:mm:ss")</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            }
+        </section>
+    </div>
+</body>
+</html>

@@ -1,0 +1,34 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <UseWindowsForms>true</UseWindowsForms>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <IsPackable>false</IsPackable>
+    <UserSecretsId>arjuywhatsapp-sample-winforms</UserSecretsId>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\ArjuyWhatsApp\ArjuyWhatsApp.csproj" />
+  </ItemGroup>
+
+  <!--
+    Igual mecanismo que usa ArjuyWhatsApp/ArjuyWhatsApp.csproj y ArjuyWhatsApp.Sample.Wpf:
+    FrameworkReference (no PackageReference) al shared framework ASP.NET Core. Este proyecto es
+    Microsoft.NET.Sdk + UseWindowsForms (NO Microsoft.NET.Sdk.Web), pero igual necesita
+    WebApplication.CreateBuilder, Kestrel, MapArjuyWhatsAppWebhook, etc. para el mini-host HTTP
+    embebido de Program.cs — ver el comentario al principio de ese archivo para el porqué completo.
+  -->
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="appsettings.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+
+</Project>

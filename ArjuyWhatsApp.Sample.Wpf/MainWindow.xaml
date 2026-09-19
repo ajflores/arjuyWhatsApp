@@ -1,0 +1,55 @@
+<Window x:Class="ArjuyWhatsApp.Sample.Wpf.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="ArjuyWhatsApp — Sample WPF" Height="480" Width="520">
+    <Grid Margin="12">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="Auto" />
+            <ColumnDefinition Width="*" />
+        </Grid.ColumnDefinitions>
+
+        <Label Grid.Row="0" Grid.Column="0" Content="Número destino:" VerticalAlignment="Center" />
+        <TextBox x:Name="txtNumero" Grid.Row="0" Grid.Column="1" Margin="4"
+                 Text="" ToolTip="Ej: 5491122334455" />
+
+        <Label Grid.Row="1" Grid.Column="0" Content="Mensaje:" VerticalAlignment="Center" />
+        <TextBox x:Name="txtMensaje" Grid.Row="1" Grid.Column="1" Margin="4" />
+
+        <Button x:Name="btnEnviar" Grid.Row="2" Grid.Column="1" Margin="4" Padding="8,4"
+                HorizontalAlignment="Left" Content="Enviar" Click="btnEnviar_Click" />
+
+        <TextBlock x:Name="lblResultado" Grid.Row="3" Grid.Column="0" Grid.ColumnSpan="2"
+                   Margin="4" TextWrapping="Wrap" />
+
+        <TextBlock Grid.Row="4" Grid.Column="0" Grid.ColumnSpan="2" Margin="4,12,4,4"
+                   FontWeight="Bold" Text="Mensajes recibidos (webhook):" />
+
+        <!--
+            ListView bindeado a MensajesRecibidos (ObservableCollection&lt;WhatsAppMessageReceived&gt;)
+            — patrón idiomático de WPF: la UI se actualiza sola cuando cambia la colección, en vez
+            de manipular items manualmente como en un ListBox.Items.Add de WinForms. La colección
+            solo se toca desde el Dispatcher thread (ver OnMessageReceived en el code-behind), así
+            que este binding siempre corre en el thread correcto.
+        -->
+        <ListView Grid.Row="5" Grid.Column="0" Grid.ColumnSpan="2" Margin="4"
+                  ItemsSource="{Binding MensajesRecibidos}">
+            <ListView.View>
+                <GridView>
+                    <GridViewColumn Header="Hora" Width="70"
+                                    DisplayMemberBinding="{Binding Timestamp, StringFormat={}{0:HH:mm:ss}}" />
+                    <GridViewColumn Header="De" Width="110" DisplayMemberBinding="{Binding From}" />
+                    <GridViewColumn Header="Tipo" Width="70" DisplayMemberBinding="{Binding Type}" />
+                    <GridViewColumn Header="Texto" Width="180" DisplayMemberBinding="{Binding Text}" />
+                </GridView>
+            </ListView.View>
+        </ListView>
+    </Grid>
+</Window>
