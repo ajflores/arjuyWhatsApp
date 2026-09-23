@@ -16,6 +16,8 @@
     <Description>Cliente .NET liviano para la API oficial de WhatsApp Cloud API de Meta. Envío de mensajes de texto, plantillas, imágenes y documentos, y descarga de media, vía HttpClient e IOptions, sin dependencias de terceros.</Description>
     <PackageTags>whatsapp;meta;cloud-api;graph-api;messaging</PackageTags>
     <RepositoryType>git</RepositoryType>
+    <RepositoryUrl>https://github.com/ajflores/arjuyWhatsApp</RepositoryUrl>
+    <PackageProjectUrl>https://github.com/ajflores/arjuyWhatsApp</PackageProjectUrl>
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
   </PropertyGroup>
