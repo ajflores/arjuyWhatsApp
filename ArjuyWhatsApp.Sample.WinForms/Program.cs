@@ -76,6 +76,10 @@ internal static class Program
         // this.Invoke/this.BeginInvoke antes de tocar el ListBox — ver Form1.OnMessageReceived.
         whatsAppClient.MessageReceived += form.OnMessageReceived;
 
+        // Mismo mecanismo de marshaling que MessageReceived (ver Form1.OnMessageStatusUpdated):
+        // este evento también llega desde un thread de background de Kestrel.
+        whatsAppClient.MessageStatusUpdated += form.OnMessageStatusUpdated;
+
         try
         {
             Application.Run(form);

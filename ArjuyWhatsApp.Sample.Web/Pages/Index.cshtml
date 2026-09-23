@@ -47,6 +47,22 @@
         </section>
 
         <section class="card">
+            <h2>Enviar confirmación (botones interactivos)</h2>
+            <p class="subtitle">
+                Manda un mensaje con dos botones fijos — "Confirmar" / "Cancelar" — usando
+                <code>SendInteractiveButtonsAsync</code>. Caso de uso real: confirmar una acción sin
+                que el cliente tenga que escribir.
+            </p>
+            <form method="post" asp-page-handler="Confirmation">
+                <div class="field">
+                    <label asp-for="Confirmation.PhoneNumber">Número (formato internacional, sin "+")</label>
+                    <input asp-for="Confirmation.PhoneNumber" placeholder="5491122334455" required />
+                </div>
+                <button type="submit">Mandar confirmación</button>
+            </form>
+        </section>
+
+        <section class="card">
             <div class="card-header">
                 <h2>Mensajes recibidos</h2>
                 <a href="/" class="button-link">Actualizar</a>

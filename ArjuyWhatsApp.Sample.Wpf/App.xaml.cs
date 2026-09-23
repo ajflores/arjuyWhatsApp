@@ -81,6 +81,11 @@ public partial class App : Application
         // MainWindow.OnMessageReceived.
         whatsAppClient.MessageReceived += mainWindow.OnMessageReceived;
 
+        // Mismo mecanismo de threading que MessageReceived (ver comentario arriba) — este evento
+        // también se dispara desde el thread de background de Kestrel. Ver
+        // MainWindow.OnMessageStatusUpdated para el indicador visual ✓✓ de estado de entrega.
+        whatsAppClient.MessageStatusUpdated += mainWindow.OnMessageStatusUpdated;
+
         MainWindow = mainWindow;
         mainWindow.Show();
     }

@@ -15,6 +15,9 @@ obj/
 .idea/
 .vscode/
 
+# Engram (memoria local de Claude Code, no parte del proyecto)
+.engram/
+
 # OS
 Thumbs.db
 .DS_Store

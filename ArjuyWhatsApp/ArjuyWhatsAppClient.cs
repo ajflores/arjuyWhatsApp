@@ -1,7 +1,9 @@
+using System.Net;
 using System.Net.Http.Json;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -38,6 +40,17 @@ public class ArjuyWhatsAppClient : IArjuyWhatsAppClient
     private const int MaxListRowTitleLength = 24;
     private const int MaxListRowDescriptionLength = 72;
 
+    /// <summary>Tamaño de página pedido a Meta al listar plantillas (<c>GET .../message_templates?limit=...</c>).</summary>
+    private const int MessageTemplatesPageSize = 100;
+
+    /// <summary>
+    /// Límite de páginas a seguir en <see cref="GetMessageTemplatesAsync"/> antes de cortar, para no
+    /// loopear indefinidamente ante un comportamiento inesperado de la API (por ejemplo, si Meta
+    /// devolviera un <c>paging.next</c> que apunta en círculo). Con <see cref="MessageTemplatesPageSize"/>
+    /// de 100, esto cubre hasta 5000 plantillas — muy por encima de lo esperable en la práctica.
+    /// </summary>
+    private const int MaxMessageTemplatesPages = 50;
+
     private static readonly JsonSerializerOptions _webhookJsonOptions = new()
     {
         PropertyNameCaseInsensitive = true
@@ -47,6 +60,7 @@ public class ArjuyWhatsAppClient : IArjuyWhatsAppClient
     private readonly ArjuyWhatsAppOptions _options;
     private readonly IServiceScopeFactory _serviceScopeFactory;
     private readonly ILogger<ArjuyWhatsAppClient> _logger;
+    private readonly IPhoneNumberNormalizer _phoneNumberNormalizer;
 
     /// <inheritdoc />
     public event EventHandler<WhatsAppMessageReceivedEventArgs>? MessageReceived;
@@ -63,16 +77,22 @@ public class ArjuyWhatsAppClient : IArjuyWhatsAppClient
     /// registre como <c>Singleton</c> (ver <c>ServiceCollectionExtensions</c> para el porqué).
     /// </param>
     /// <param name="logger">Logger usado para reportar errores de handlers individuales sin interrumpir el procesamiento del webhook.</param>
+    /// <param name="phoneNumberNormalizer">
+    /// Estrategia de normalización del número de destino antes de enviarlo a Meta. Se resuelve por
+    /// DI — ver <see cref="IPhoneNumberNormalizer"/> y <see cref="ArjuyWhatsAppOptions.CountryCode"/>.
+    /// </param>
     public ArjuyWhatsAppClient(
         IHttpClientFactory httpClientFactory,
         IOptions<ArjuyWhatsAppOptions> options,
         IServiceScopeFactory serviceScopeFactory,
-        ILogger<ArjuyWhatsAppClient> logger)
+        ILogger<ArjuyWhatsAppClient> logger,
+        IPhoneNumberNormalizer phoneNumberNormalizer)
     {
         _httpClientFactory = httpClientFactory;
         _options = options.Value;
         _serviceScopeFactory = serviceScopeFactory;
         _logger = logger;
+        _phoneNumberNormalizer = phoneNumberNormalizer;
     }
 
     /// <inheritdoc />
@@ -205,6 +225,12 @@ public class ArjuyWhatsAppClient : IArjuyWhatsAppClient
             "image" => WhatsAppMessageType.Image,
             "document" => WhatsAppMessageType.Document,
             "interactive" => WhatsAppMessageType.Interactive,
+            "location" => WhatsAppMessageType.Location,
+            "contacts" => WhatsAppMessageType.Contacts,
+            "reaction" => WhatsAppMessageType.Reaction,
+            "audio" => WhatsAppMessageType.Audio,
+            "video" => WhatsAppMessageType.Video,
+            "sticker" => WhatsAppMessageType.Sticker,
             _ => WhatsAppMessageType.Unknown
         };
 
@@ -222,11 +248,60 @@ public class ArjuyWhatsAppClient : IArjuyWhatsAppClient
             {
                 WhatsAppMessageType.Image => inboundMessage.Image?.Id,
                 WhatsAppMessageType.Document => inboundMessage.Document?.Id,
+                WhatsAppMessageType.Audio => inboundMessage.Audio?.Id,
+                WhatsAppMessageType.Video => inboundMessage.Video?.Id,
+                WhatsAppMessageType.Sticker => inboundMessage.Sticker?.Id,
                 _ => null
             },
+            IsVoiceNote = type == WhatsAppMessageType.Audio ? inboundMessage.Audio?.Voice ?? false : null,
             InteractiveReplyId = interactiveReply?.Id,
             InteractiveReplyTitle = interactiveReply?.Title,
+            Location = type == WhatsAppMessageType.Location && inboundMessage.Location != null
+                ? new WhatsAppReceivedLocation
+                {
+                    Latitude = inboundMessage.Location.Latitude,
+                    Longitude = inboundMessage.Location.Longitude,
+                    Name = inboundMessage.Location.Name,
+                    Address = inboundMessage.Location.Address
+                }
+                : null,
+            Contacts = type == WhatsAppMessageType.Contacts
+                ? inboundMessage.Contacts.Select(MapToContact).ToList()
+                : [],
+            ReactionEmoji = type == WhatsAppMessageType.Reaction ? inboundMessage.Reaction?.Emoji ?? string.Empty : null,
+            ReactionToMessageId = type == WhatsAppMessageType.Reaction ? inboundMessage.Reaction?.MessageId : null,
             Timestamp = ParseTimestamp(inboundMessage.Timestamp)
+        };
+    }
+
+    private static WhatsAppContact MapToContact(WhatsAppWebhookContactContent source)
+    {
+        return new WhatsAppContact
+        {
+            Name = new WhatsAppContactName
+            {
+                FormattedName = source.Name.FormattedName,
+                FirstName = source.Name.FirstName,
+                LastName = source.Name.LastName,
+                MiddleName = source.Name.MiddleName,
+                Suffix = source.Name.Suffix,
+                Prefix = source.Name.Prefix
+            },
+            Phones = source.Phones.Select(p => new WhatsAppContactPhone { Phone = p.Phone, Type = p.Type, WaId = p.WaId }).ToList(),
+            Emails = source.Emails.Select(e => new WhatsAppContactEmail { Email = e.Email, Type = e.Type }).ToList(),
+            Addresses = source.Addresses.Select(a => new WhatsAppContactAddress
+            {
+                Street = a.Street,
+                City = a.City,
+                State = a.State,
+                Zip = a.Zip,
+                Country = a.Country,
+                CountryCode = a.CountryCode,
+                Type = a.Type
+            }).ToList(),
+            Org = source.Org != null ? new WhatsAppContactOrg { Company = source.Org.Company, Department = source.Org.Department, Title = source.Org.Title } : null,
+            Birthday = source.Birthday,
+            Urls = source.Urls.Select(u => new WhatsAppContactUrl { Url = u.Url, Type = u.Type }).ToList()
         };
     }
 
@@ -296,71 +371,176 @@ public class ArjuyWhatsAppClient : IArjuyWhatsAppClient
     }
 
     /// <inheritdoc />
-    public async Task<MResult<string>> SendTextAsync(string phoneNumber, string message)
+    public async Task<MResult<string>> SendTextAsync(string phoneNumber, string message, string? replyToMessageId = null)
     {
         var payload = new
         {
             messaging_product = "whatsapp",
-            to = NormalizePhoneNumber(phoneNumber),
+            to = _phoneNumberNormalizer.Normalize(phoneNumber),
             type = "text",
             text = new { body = message }
         };
 
-        return await SendMessagePayloadAsync(payload);
+        return await SendMessagePayloadAsync(payload, replyToMessageId);
     }
 
     /// <inheritdoc />
-    public async Task<MResult<string>> SendTemplateAsync(string phoneNumber, string templateName, string languageCode, IEnumerable<string> parameters)
+    public async Task<MResult<string>> SendTemplateAsync(string phoneNumber, string templateName, string languageCode, IEnumerable<string> parameters, string? replyToMessageId = null)
     {
+        return await SendTemplateAsync(phoneNumber, templateName, languageCode, parameters, headerMedia: null, buttonParameters: null, replyToMessageId);
+    }
+
+    /// <inheritdoc />
+    public async Task<MResult<string>> SendTemplateAsync(string phoneNumber, string templateName, string languageCode, IEnumerable<string> bodyParameters, WhatsAppTemplateHeaderMedia? headerMedia, IEnumerable<WhatsAppTemplateButtonParameter>? buttonParameters = null, string? replyToMessageId = null)
+    {
+        if (headerMedia != null)
+        {
+            var hasLink = !string.IsNullOrWhiteSpace(headerMedia.Link);
+            var hasMediaId = !string.IsNullOrWhiteSpace(headerMedia.MediaId);
+
+            if (hasLink == hasMediaId)
+            {
+                return MResult<string>.Fail("WhatsAppTemplateHeaderMedia requiere exactamente uno entre Link y MediaId (no ambos, no ninguno).");
+            }
+        }
+
+        var components = new List<object>();
+
+        if (headerMedia != null)
+        {
+            components.Add(BuildTemplateHeaderComponent(headerMedia));
+        }
+
+        components.Add(new
+        {
+            type = "body",
+            parameters = bodyParameters.Select(p => new { type = "text", text = p }).ToArray()
+        });
+
+        if (buttonParameters != null)
+        {
+            foreach (var button in buttonParameters)
+            {
+                components.Add(BuildTemplateButtonComponent(button));
+            }
+        }
+
         var payload = new
         {
             messaging_product = "whatsapp",
-            to = NormalizePhoneNumber(phoneNumber),
+            to = _phoneNumberNormalizer.Normalize(phoneNumber),
             type = "template",
             template = new
             {
                 name = templateName,
                 language = new { code = languageCode },
-                components = new object[]
-                {
-                    new
-                    {
-                        type = "body",
-                        parameters = parameters.Select(p => new { type = "text", text = p }).ToArray()
-                    }
-                }
+                components = components.ToArray()
             }
         };
 
-        return await SendMessagePayloadAsync(payload);
+        return await SendMessagePayloadAsync(payload, replyToMessageId);
+    }
+
+    /// <summary>
+    /// Arma el componente <c>header</c> del payload de envío de un template a partir de
+    /// <see cref="WhatsAppTemplateHeaderMedia"/> — <c>{"type":"header","parameters":[{"type":"image|video|document","image|video|document":{"link"|"id":"...", "filename"?:"..."}}]}</c>,
+    /// verificado contra la documentación oficial de Meta (Cloud API, "Send Template Messages") al
+    /// 2026-09-19. <c>filename</c> solo se incluye para header de tipo documento.
+    /// </summary>
+    private static object BuildTemplateHeaderComponent(WhatsAppTemplateHeaderMedia headerMedia)
+    {
+        var mediaTypeName = headerMedia.Type switch
+        {
+            WhatsAppTemplateHeaderMediaType.Image => "image",
+            WhatsAppTemplateHeaderMediaType.Video => "video",
+            WhatsAppTemplateHeaderMediaType.Document => "document",
+            _ => throw new ArgumentOutOfRangeException(nameof(headerMedia), headerMedia.Type, "Tipo de header de plantilla no soportado.")
+        };
+
+        var mediaFields = new Dictionary<string, object?>();
+
+        if (!string.IsNullOrWhiteSpace(headerMedia.Link))
+        {
+            mediaFields["link"] = headerMedia.Link;
+        }
+        else
+        {
+            mediaFields["id"] = headerMedia.MediaId;
+        }
+
+        if (headerMedia.Type == WhatsAppTemplateHeaderMediaType.Document)
+        {
+            mediaFields["filename"] = headerMedia.FileName ?? string.Empty;
+        }
+
+        var parameter = new Dictionary<string, object?>
+        {
+            ["type"] = mediaTypeName,
+            [mediaTypeName] = mediaFields
+        };
+
+        return new
+        {
+            type = "header",
+            parameters = new object[] { parameter }
+        };
+    }
+
+    /// <summary>
+    /// Arma el componente <c>button</c> del payload de envío de un template a partir de
+    /// <see cref="WhatsAppTemplateButtonParameter"/> — <c>{"type":"button","sub_type":"url|quick_reply","index":N,"parameters":[{"type":"text|payload","text|payload":"valor"}]}</c>,
+    /// verificado contra la documentación oficial de Meta al 2026-09-19.
+    /// </summary>
+    private static object BuildTemplateButtonComponent(WhatsAppTemplateButtonParameter button)
+    {
+        var (subTypeName, parameterType) = button.SubType switch
+        {
+            WhatsAppTemplateButtonSubType.Url => ("url", "text"),
+            WhatsAppTemplateButtonSubType.QuickReply => ("quick_reply", "payload"),
+            _ => throw new ArgumentOutOfRangeException(nameof(button), button.SubType, "Sub-tipo de botón de plantilla no soportado.")
+        };
+
+        var parameter = new Dictionary<string, object?>
+        {
+            ["type"] = parameterType,
+            [parameterType] = button.Value
+        };
+
+        return new
+        {
+            type = "button",
+            sub_type = subTypeName,
+            index = button.Index,
+            parameters = new object[] { parameter }
+        };
     }
 
     /// <inheritdoc />
-    public async Task<MResult<string>> SendImageAsync(string phoneNumber, string imageUrl, string? caption = null)
+    public async Task<MResult<string>> SendImageAsync(string phoneNumber, string imageUrl, string? caption = null, string? replyToMessageId = null)
     {
         var payload = new
         {
             messaging_product = "whatsapp",
-            to = NormalizePhoneNumber(phoneNumber),
+            to = _phoneNumberNormalizer.Normalize(phoneNumber),
             type = "image",
             image = new { link = imageUrl, caption = caption ?? string.Empty }
         };
 
-        return await SendMessagePayloadAsync(payload);
+        return await SendMessagePayloadAsync(payload, replyToMessageId);
     }
 
     /// <inheritdoc />
-    public async Task<MResult<string>> SendDocumentAsync(string phoneNumber, string documentUrl, string fileName, string? caption = null)
+    public async Task<MResult<string>> SendDocumentAsync(string phoneNumber, string documentUrl, string fileName, string? caption = null, string? replyToMessageId = null)
     {
         var payload = new
         {
             messaging_product = "whatsapp",
-            to = NormalizePhoneNumber(phoneNumber),
+            to = _phoneNumberNormalizer.Normalize(phoneNumber),
             type = "document",
             document = new { link = documentUrl, filename = fileName, caption = caption ?? string.Empty }
         };
 
-        return await SendMessagePayloadAsync(payload);
+        return await SendMessagePayloadAsync(payload, replyToMessageId);
     }
 
     /// <inheritdoc />
@@ -371,53 +551,56 @@ public class ArjuyWhatsAppClient : IArjuyWhatsAppClient
             return MResult<byte[]>.Fail("ArjuyWhatsApp no está configurado: falta AccessToken.");
         }
 
-        try
+        return await ExecuteWithRetryAsync<byte[]>(async () =>
         {
-            var client = _httpClientFactory.CreateClient(HttpClientName);
-
-            // Paso 1: obtener la URL de descarga temporal desde Meta.
-            var metaUrl = $"https://graph.facebook.com/{_options.ApiVersion}/{mediaId}";
-            using var metaRequest = new HttpRequestMessage(HttpMethod.Get, metaUrl);
-            metaRequest.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", _options.AccessToken);
-
-            using var metaResponse = await client.SendAsync(metaRequest);
-            var metaBody = await metaResponse.Content.ReadAsStringAsync();
-
-            if (!metaResponse.IsSuccessStatusCode)
+            try
             {
-                return MResult<byte[]>.Fail($"Error Meta API ({(int)metaResponse.StatusCode}): {metaBody}");
-            }
+                var client = _httpClientFactory.CreateClient(HttpClientName);
 
-            using var metaDoc = JsonDocument.Parse(metaBody);
-            if (!metaDoc.RootElement.TryGetProperty("url", out var urlProp))
+                // Paso 1: obtener la URL de descarga temporal desde Meta.
+                var metaUrl = $"https://graph.facebook.com/{_options.ApiVersion}/{mediaId}";
+                using var metaRequest = new HttpRequestMessage(HttpMethod.Get, metaUrl);
+                metaRequest.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", _options.AccessToken);
+
+                using var metaResponse = await client.SendAsync(metaRequest);
+                var metaBody = await metaResponse.Content.ReadAsStringAsync();
+
+                if (!metaResponse.IsSuccessStatusCode)
+                {
+                    return (MResult<byte[]>.Fail(ParseMetaError(metaResponse.StatusCode, metaBody)), GetRetryAfterDelay(metaResponse));
+                }
+
+                using var metaDoc = JsonDocument.Parse(metaBody);
+                if (!metaDoc.RootElement.TryGetProperty("url", out var urlProp))
+                {
+                    return (MResult<byte[]>.Fail("Meta no devolvió URL de descarga para el media id indicado."), (TimeSpan?)null);
+                }
+
+                var downloadUrl = urlProp.GetString();
+                if (string.IsNullOrWhiteSpace(downloadUrl))
+                {
+                    return (MResult<byte[]>.Fail("Meta devolvió una URL de descarga vacía."), (TimeSpan?)null);
+                }
+
+                // Paso 2: descargar el archivo binario usando el mismo token.
+                using var downloadRequest = new HttpRequestMessage(HttpMethod.Get, downloadUrl);
+                downloadRequest.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", _options.AccessToken);
+
+                using var downloadResponse = await client.SendAsync(downloadRequest);
+                if (!downloadResponse.IsSuccessStatusCode)
+                {
+                    var errorBody = await downloadResponse.Content.ReadAsStringAsync();
+                    return (MResult<byte[]>.Fail(ParseMetaError(downloadResponse.StatusCode, errorBody)), GetRetryAfterDelay(downloadResponse));
+                }
+
+                var data = await downloadResponse.Content.ReadAsByteArrayAsync();
+                return (MResult<byte[]>.Success(data), (TimeSpan?)null);
+            }
+            catch (Exception ex)
             {
-                return MResult<byte[]>.Fail("Meta no devolvió URL de descarga para el media id indicado.");
+                return (MResult<byte[]>.Fail(ex.Message), (TimeSpan?)null);
             }
-
-            var downloadUrl = urlProp.GetString();
-            if (string.IsNullOrWhiteSpace(downloadUrl))
-            {
-                return MResult<byte[]>.Fail("Meta devolvió una URL de descarga vacía.");
-            }
-
-            // Paso 2: descargar el archivo binario usando el mismo token.
-            using var downloadRequest = new HttpRequestMessage(HttpMethod.Get, downloadUrl);
-            downloadRequest.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", _options.AccessToken);
-
-            using var downloadResponse = await client.SendAsync(downloadRequest);
-            if (!downloadResponse.IsSuccessStatusCode)
-            {
-                var errorBody = await downloadResponse.Content.ReadAsStringAsync();
-                return MResult<byte[]>.Fail($"No se pudo descargar el archivo de Meta ({(int)downloadResponse.StatusCode}): {errorBody}");
-            }
-
-            var data = await downloadResponse.Content.ReadAsByteArrayAsync();
-            return MResult<byte[]>.Success(data);
-        }
-        catch (Exception ex)
-        {
-            return MResult<byte[]>.Fail(ex.Message);
-        }
+        });
     }
 
     /// <inheritdoc />
@@ -428,74 +611,161 @@ public class ArjuyWhatsAppClient : IArjuyWhatsAppClient
             return MResult<string>.Fail("ArjuyWhatsApp no está configurado: falta AccessToken o PhoneNumberId.");
         }
 
-        try
+        return await ExecuteWithRetryAsync<string>(async () =>
         {
-            var client = _httpClientFactory.CreateClient(HttpClientName);
-            var url = $"https://graph.facebook.com/{_options.ApiVersion}/{_options.PhoneNumberId}/media";
-
-            using var request = new HttpRequestMessage(HttpMethod.Post, url);
-            request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", _options.AccessToken);
-
-            using var content = new MultipartFormDataContent();
-            using var fileStreamContent = new ByteArrayContent(fileContent);
-            fileStreamContent.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue(mimeType);
-            content.Add(fileStreamContent, "file", fileName);
-            content.Add(new StringContent(mimeType), "type");
-            content.Add(new StringContent("whatsapp"), "messaging_product");
-            request.Content = content;
-
-            using var response = await client.SendAsync(request);
-            var body = await response.Content.ReadAsStringAsync();
-
-            if (!response.IsSuccessStatusCode)
+            try
             {
-                return MResult<string>.Fail($"Error Meta API ({(int)response.StatusCode}): {body}");
-            }
+                var client = _httpClientFactory.CreateClient(HttpClientName);
+                var url = $"https://graph.facebook.com/{_options.ApiVersion}/{_options.PhoneNumberId}/media";
 
-            using var doc = JsonDocument.Parse(body);
-            if (!doc.RootElement.TryGetProperty("id", out var idProp))
+                using var request = new HttpRequestMessage(HttpMethod.Post, url);
+                request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", _options.AccessToken);
+
+                using var content = new MultipartFormDataContent();
+                using var fileStreamContent = new ByteArrayContent(fileContent);
+                fileStreamContent.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue(mimeType);
+                content.Add(fileStreamContent, "file", fileName);
+                content.Add(new StringContent(mimeType), "type");
+                content.Add(new StringContent("whatsapp"), "messaging_product");
+                request.Content = content;
+
+                using var response = await client.SendAsync(request);
+                var body = await response.Content.ReadAsStringAsync();
+
+                if (!response.IsSuccessStatusCode)
+                {
+                    return (MResult<string>.Fail(ParseMetaError(response.StatusCode, body)), GetRetryAfterDelay(response));
+                }
+
+                using var doc = JsonDocument.Parse(body);
+                if (!doc.RootElement.TryGetProperty("id", out var idProp))
+                {
+                    return (MResult<string>.Fail("Meta no devolvió un media id para el archivo subido."), (TimeSpan?)null);
+                }
+
+                return (MResult<string>.Success(idProp.GetString() ?? string.Empty), (TimeSpan?)null);
+            }
+            catch (Exception ex)
             {
-                return MResult<string>.Fail("Meta no devolvió un media id para el archivo subido.");
+                return (MResult<string>.Fail(ex.Message), (TimeSpan?)null);
             }
-
-            return MResult<string>.Success(idProp.GetString() ?? string.Empty);
-        }
-        catch (Exception ex)
-        {
-            return MResult<string>.Fail(ex.Message);
-        }
+        });
     }
 
     /// <inheritdoc />
-    public async Task<MResult<string>> SendImageByMediaIdAsync(string phoneNumber, string mediaId, string? caption = null)
+    public async Task<MResult<string>> SendImageByMediaIdAsync(string phoneNumber, string mediaId, string? caption = null, string? replyToMessageId = null)
     {
         var payload = new
         {
             messaging_product = "whatsapp",
-            to = NormalizePhoneNumber(phoneNumber),
+            to = _phoneNumberNormalizer.Normalize(phoneNumber),
             type = "image",
             image = new { id = mediaId, caption = caption ?? string.Empty }
         };
 
-        return await SendMessagePayloadAsync(payload);
+        return await SendMessagePayloadAsync(payload, replyToMessageId);
     }
 
     /// <inheritdoc />
-    public async Task<MResult<string>> SendDocumentByMediaIdAsync(string phoneNumber, string mediaId, string? fileName = null, string? caption = null)
+    public async Task<MResult<string>> SendDocumentByMediaIdAsync(string phoneNumber, string mediaId, string? fileName = null, string? caption = null, string? replyToMessageId = null)
     {
         var payload = new
         {
             messaging_product = "whatsapp",
-            to = NormalizePhoneNumber(phoneNumber),
+            to = _phoneNumberNormalizer.Normalize(phoneNumber),
             type = "document",
             document = new { id = mediaId, filename = fileName ?? string.Empty, caption = caption ?? string.Empty }
         };
 
-        return await SendMessagePayloadAsync(payload);
+        return await SendMessagePayloadAsync(payload, replyToMessageId);
     }
 
     /// <inheritdoc />
-    public async Task<MResult<string>> SendInteractiveButtonsAsync(string phoneNumber, string bodyText, IEnumerable<(string Id, string Title)> buttons)
+    public async Task<MResult<string>> SendAudioAsync(string phoneNumber, string audioUrl, bool voice = false, string? replyToMessageId = null, CancellationToken cancellationToken = default)
+    {
+        var payload = new
+        {
+            messaging_product = "whatsapp",
+            to = _phoneNumberNormalizer.Normalize(phoneNumber),
+            type = "audio",
+            audio = new { link = audioUrl, voice }
+        };
+
+        return await SendMessagePayloadAsync(payload, replyToMessageId, cancellationToken);
+    }
+
+    /// <inheritdoc />
+    public async Task<MResult<string>> SendAudioByMediaIdAsync(string phoneNumber, string mediaId, bool voice = false, string? replyToMessageId = null, CancellationToken cancellationToken = default)
+    {
+        var payload = new
+        {
+            messaging_product = "whatsapp",
+            to = _phoneNumberNormalizer.Normalize(phoneNumber),
+            type = "audio",
+            audio = new { id = mediaId, voice }
+        };
+
+        return await SendMessagePayloadAsync(payload, replyToMessageId, cancellationToken);
+    }
+
+    /// <inheritdoc />
+    public async Task<MResult<string>> SendVideoAsync(string phoneNumber, string videoUrl, string? caption = null, string? replyToMessageId = null, CancellationToken cancellationToken = default)
+    {
+        var payload = new
+        {
+            messaging_product = "whatsapp",
+            to = _phoneNumberNormalizer.Normalize(phoneNumber),
+            type = "video",
+            video = new { link = videoUrl, caption = caption ?? string.Empty }
+        };
+
+        return await SendMessagePayloadAsync(payload, replyToMessageId, cancellationToken);
+    }
+
+    /// <inheritdoc />
+    public async Task<MResult<string>> SendVideoByMediaIdAsync(string phoneNumber, string mediaId, string? caption = null, string? replyToMessageId = null, CancellationToken cancellationToken = default)
+    {
+        var payload = new
+        {
+            messaging_product = "whatsapp",
+            to = _phoneNumberNormalizer.Normalize(phoneNumber),
+            type = "video",
+            video = new { id = mediaId, caption = caption ?? string.Empty }
+        };
+
+        return await SendMessagePayloadAsync(payload, replyToMessageId, cancellationToken);
+    }
+
+    /// <inheritdoc />
+    public async Task<MResult<string>> SendStickerAsync(string phoneNumber, string stickerUrl, string? replyToMessageId = null, CancellationToken cancellationToken = default)
+    {
+        var payload = new
+        {
+            messaging_product = "whatsapp",
+            to = _phoneNumberNormalizer.Normalize(phoneNumber),
+            type = "sticker",
+            sticker = new { link = stickerUrl }
+        };
+
+        return await SendMessagePayloadAsync(payload, replyToMessageId, cancellationToken);
+    }
+
+    /// <inheritdoc />
+    public async Task<MResult<string>> SendStickerByMediaIdAsync(string phoneNumber, string mediaId, string? replyToMessageId = null, CancellationToken cancellationToken = default)
+    {
+        var payload = new
+        {
+            messaging_product = "whatsapp",
+            to = _phoneNumberNormalizer.Normalize(phoneNumber),
+            type = "sticker",
+            sticker = new { id = mediaId }
+        };
+
+        return await SendMessagePayloadAsync(payload, replyToMessageId, cancellationToken);
+    }
+
+    /// <inheritdoc />
+    public async Task<MResult<string>> SendInteractiveButtonsAsync(string phoneNumber, string bodyText, IEnumerable<(string Id, string Title)> buttons, string? replyToMessageId = null)
     {
         var buttonList = buttons.ToList();
 
@@ -546,7 +816,7 @@ public class ArjuyWhatsAppClient : IArjuyWhatsAppClient
         var payload = new
         {
             messaging_product = "whatsapp",
-            to = NormalizePhoneNumber(phoneNumber),
+            to = _phoneNumberNormalizer.Normalize(phoneNumber),
             type = "interactive",
             interactive = new
             {
@@ -563,11 +833,11 @@ public class ArjuyWhatsAppClient : IArjuyWhatsAppClient
             }
         };
 
-        return await SendMessagePayloadAsync(payload);
+        return await SendMessagePayloadAsync(payload, replyToMessageId);
     }
 
     /// <inheritdoc />
-    public async Task<MResult<string>> SendInteractiveListAsync(string phoneNumber, string bodyText, string buttonText, IEnumerable<(string SectionTitle, IEnumerable<(string Id, string Title, string? Description)> Rows)> sections)
+    public async Task<MResult<string>> SendInteractiveListAsync(string phoneNumber, string bodyText, string buttonText, IEnumerable<(string SectionTitle, IEnumerable<(string Id, string Title, string? Description)> Rows)> sections, string? replyToMessageId = null)
     {
         if (string.IsNullOrWhiteSpace(buttonText))
         {
@@ -663,7 +933,7 @@ public class ArjuyWhatsAppClient : IArjuyWhatsAppClient
         var payload = new
         {
             messaging_product = "whatsapp",
-            to = NormalizePhoneNumber(phoneNumber),
+            to = _phoneNumberNormalizer.Normalize(phoneNumber),
             type = "interactive",
             interactive = new
             {
@@ -686,58 +956,580 @@ public class ArjuyWhatsAppClient : IArjuyWhatsAppClient
             }
         };
 
-        return await SendMessagePayloadAsync(payload);
+        return await SendMessagePayloadAsync(payload, replyToMessageId);
+    }
+
+    /// <inheritdoc />
+    public async Task<MResult<string>> SendReactionAsync(string phoneNumber, string messageId, string emoji, CancellationToken cancellationToken = default)
+    {
+        var payload = new
+        {
+            messaging_product = "whatsapp",
+            to = _phoneNumberNormalizer.Normalize(phoneNumber),
+            type = "reaction",
+            reaction = new { message_id = messageId, emoji }
+        };
+
+        return await SendMessagePayloadAsync(payload, replyToMessageId: null, cancellationToken);
+    }
+
+    /// <inheritdoc />
+    public async Task<MResult<string>> SendLocationAsync(string phoneNumber, double latitude, double longitude, string? name = null, string? address = null, string? replyToMessageId = null, CancellationToken cancellationToken = default)
+    {
+        var payload = new
+        {
+            messaging_product = "whatsapp",
+            to = _phoneNumberNormalizer.Normalize(phoneNumber),
+            type = "location",
+            location = new
+            {
+                latitude,
+                longitude,
+                name = name ?? string.Empty,
+                address = address ?? string.Empty
+            }
+        };
+
+        return await SendMessagePayloadAsync(payload, replyToMessageId, cancellationToken);
+    }
+
+    /// <inheritdoc />
+    public async Task<MResult<string>> SendContactsAsync(string phoneNumber, IEnumerable<WhatsAppContact> contacts, string? replyToMessageId = null, CancellationToken cancellationToken = default)
+    {
+        var contactList = contacts.ToList();
+
+        if (contactList.Count == 0)
+        {
+            return MResult<string>.Fail("SendContactsAsync requiere al menos un contacto.");
+        }
+
+        foreach (var contact in contactList)
+        {
+            if (string.IsNullOrWhiteSpace(contact.Name?.FormattedName))
+            {
+                return MResult<string>.Fail("Cada contacto requiere Name.FormattedName no vacío.");
+            }
+        }
+
+        var payload = new
+        {
+            messaging_product = "whatsapp",
+            to = _phoneNumberNormalizer.Normalize(phoneNumber),
+            type = "contacts",
+            contacts = contactList.Select(BuildContactPayload).ToArray()
+        };
+
+        return await SendMessagePayloadAsync(payload, replyToMessageId, cancellationToken);
     }
 
     /// <summary>
-    /// Hook de normalización del número de destino antes de enviarlo en el campo "to" del payload.
-    /// La implementación por defecto no hace ninguna transformación (solo recorta espacios en blanco);
-    /// las aplicaciones que necesiten reglas específicas de un país o formato (por ejemplo, el "9"
-    /// móvil de Argentina) deben heredar de esta clase y sobreescribir este método. Ver README, sección Roadmap.
+    /// Arma el objeto de un contacto individual del array <c>contacts</c> del payload de envío,
+    /// omitiendo secciones vacías/nulas (Meta no exige ningún campo salvo <c>name.formatted_name</c>,
+    /// ya validado por el llamador). Formato verificado contra la documentación oficial de Meta
+    /// (Cloud API, "Contacts Messages") al 2026-09-19.
     /// </summary>
-    /// <param name="phoneNumber">Número de teléfono tal como lo recibe la aplicación consumidora.</param>
-    /// <returns>Número normalizado a enviar en el payload de la API de Meta.</returns>
-    protected virtual string NormalizePhoneNumber(string phoneNumber)
+    private static object BuildContactPayload(WhatsAppContact contact)
     {
-        return phoneNumber.Trim();
+        var result = new Dictionary<string, object?>
+        {
+            ["name"] = new
+            {
+                formatted_name = contact.Name.FormattedName,
+                first_name = contact.Name.FirstName,
+                last_name = contact.Name.LastName,
+                middle_name = contact.Name.MiddleName,
+                suffix = contact.Name.Suffix,
+                prefix = contact.Name.Prefix
+            }
+        };
+
+        if (contact.Phones.Count > 0)
+        {
+            result["phones"] = contact.Phones
+                .Select(p => new { phone = p.Phone, type = p.Type, wa_id = p.WaId })
+                .ToArray();
+        }
+
+        if (contact.Emails.Count > 0)
+        {
+            result["emails"] = contact.Emails
+                .Select(e => new { email = e.Email, type = e.Type })
+                .ToArray();
+        }
+
+        if (contact.Addresses.Count > 0)
+        {
+            result["addresses"] = contact.Addresses
+                .Select(a => new
+                {
+                    street = a.Street,
+                    city = a.City,
+                    state = a.State,
+                    zip = a.Zip,
+                    country = a.Country,
+                    country_code = a.CountryCode,
+                    type = a.Type
+                })
+                .ToArray();
+        }
+
+        if (contact.Org != null)
+        {
+            result["org"] = new
+            {
+                company = contact.Org.Company,
+                department = contact.Org.Department,
+                title = contact.Org.Title
+            };
+        }
+
+        if (!string.IsNullOrWhiteSpace(contact.Birthday))
+        {
+            result["birthday"] = contact.Birthday;
+        }
+
+        if (contact.Urls.Count > 0)
+        {
+            result["urls"] = contact.Urls
+                .Select(u => new { url = u.Url, type = u.Type })
+                .ToArray();
+        }
+
+        return result;
+    }
+
+    /// <inheritdoc />
+    public async Task<MResult<IReadOnlyList<WhatsAppMessageTemplate>>> GetMessageTemplatesAsync(CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(_options.AccessToken) || string.IsNullOrWhiteSpace(_options.BusinessAccountId))
+        {
+            return MResult<IReadOnlyList<WhatsAppMessageTemplate>>.Fail("ArjuyWhatsApp no está configurado: falta AccessToken o BusinessAccountId.");
+        }
+
+        var templates = new List<WhatsAppMessageTemplate>();
+        var nextUrl = $"https://graph.facebook.com/{_options.ApiVersion}/{_options.BusinessAccountId}/message_templates?limit={MessageTemplatesPageSize}";
+
+        for (var page = 0; page < MaxMessageTemplatesPages && nextUrl != null; page++)
+        {
+            var pageResult = await ExecuteWithRetryAsync<(List<WhatsAppMessageTemplate> Templates, string? NextUrl)>(async () =>
+            {
+                try
+                {
+                    var client = _httpClientFactory.CreateClient(HttpClientName);
+
+                    using var request = new HttpRequestMessage(HttpMethod.Get, nextUrl);
+                    request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", _options.AccessToken);
+
+                    using var response = await client.SendAsync(request, cancellationToken);
+                    var body = await response.Content.ReadAsStringAsync(cancellationToken);
+
+                    if (!response.IsSuccessStatusCode)
+                    {
+                        return ((MResult<(List<WhatsAppMessageTemplate>, string?)>.Fail(ParseMetaError(response.StatusCode, body)), GetRetryAfterDelay(response)));
+                    }
+
+                    var (pageTemplates, pageNextUrl) = ParseMessageTemplatesPage(body);
+                    return (MResult<(List<WhatsAppMessageTemplate>, string?)>.Success((pageTemplates, pageNextUrl)), (TimeSpan?)null);
+                }
+                catch (Exception ex)
+                {
+                    return (MResult<(List<WhatsAppMessageTemplate>, string?)>.Fail(ex.Message), (TimeSpan?)null);
+                }
+            }, cancellationToken);
+
+            if (!pageResult.IsSuccess)
+            {
+                return pageResult.Error != null
+                    ? MResult<IReadOnlyList<WhatsAppMessageTemplate>>.Fail(pageResult.Error)
+                    : MResult<IReadOnlyList<WhatsAppMessageTemplate>>.Fail(pageResult.Message ?? "Error desconocido al listar plantillas.");
+            }
+
+            templates.AddRange(pageResult.Data!.Templates);
+            nextUrl = pageResult.Data!.NextUrl;
+        }
+
+        return MResult<IReadOnlyList<WhatsAppMessageTemplate>>.Success(templates);
+    }
+
+    /// <summary>
+    /// Parsea una página de la respuesta de <c>GET /{business-account-id}/message_templates</c>:
+    /// la lista de plantillas de <c>data[]</c> y la URL de la página siguiente en
+    /// <c>paging.next</c> (<c>null</c> si no hay más páginas).
+    /// </summary>
+    private static (List<WhatsAppMessageTemplate> Templates, string? NextUrl) ParseMessageTemplatesPage(string body)
+    {
+        var templates = new List<WhatsAppMessageTemplate>();
+
+        using var doc = JsonDocument.Parse(body);
+
+        if (doc.RootElement.TryGetProperty("data", out var dataElement) && dataElement.ValueKind == JsonValueKind.Array)
+        {
+            foreach (var item in dataElement.EnumerateArray())
+            {
+                templates.Add(ParseMessageTemplate(item));
+            }
+        }
+
+        string? nextUrl = null;
+        if (doc.RootElement.TryGetProperty("paging", out var pagingElement) &&
+            pagingElement.TryGetProperty("next", out var nextProp) &&
+            nextProp.ValueKind == JsonValueKind.String)
+        {
+            nextUrl = nextProp.GetString();
+        }
+
+        return (templates, nextUrl);
+    }
+
+    private static WhatsAppMessageTemplate ParseMessageTemplate(JsonElement item)
+    {
+        var status = item.TryGetProperty("status", out var statusProp) ? statusProp.GetString() : null;
+        var components = new List<WhatsAppTemplateComponent>();
+
+        if (item.TryGetProperty("components", out var componentsElement) && componentsElement.ValueKind == JsonValueKind.Array)
+        {
+            foreach (var componentElement in componentsElement.EnumerateArray())
+            {
+                components.Add(ParseTemplateComponent(componentElement));
+            }
+        }
+
+        return new WhatsAppMessageTemplate
+        {
+            Id = item.TryGetProperty("id", out var idProp) ? idProp.GetString() ?? string.Empty : string.Empty,
+            Name = item.TryGetProperty("name", out var nameProp) ? nameProp.GetString() ?? string.Empty : string.Empty,
+            Language = item.TryGetProperty("language", out var languageProp) ? languageProp.GetString() ?? string.Empty : string.Empty,
+            Category = item.TryGetProperty("category", out var categoryProp) ? categoryProp.GetString() ?? string.Empty : string.Empty,
+            Status = MapTemplateStatus(status),
+            RejectedReason = item.TryGetProperty("rejected_reason", out var rejectedProp) && rejectedProp.ValueKind == JsonValueKind.String
+                ? rejectedProp.GetString()
+                : null,
+            Components = components
+        };
+    }
+
+    private static WhatsAppTemplateComponent ParseTemplateComponent(JsonElement componentElement)
+    {
+        var type = componentElement.TryGetProperty("type", out var typeProp) ? typeProp.GetString() : null;
+        var text = componentElement.TryGetProperty("text", out var textProp) && textProp.ValueKind == JsonValueKind.String
+            ? textProp.GetString()
+            : null;
+
+        var buttons = new List<WhatsAppTemplateButton>();
+        if (componentElement.TryGetProperty("buttons", out var buttonsElement) && buttonsElement.ValueKind == JsonValueKind.Array)
+        {
+            foreach (var buttonElement in buttonsElement.EnumerateArray())
+            {
+                buttons.Add(new WhatsAppTemplateButton
+                {
+                    Type = buttonElement.TryGetProperty("type", out var buttonTypeProp) ? buttonTypeProp.GetString() ?? string.Empty : string.Empty,
+                    Text = buttonElement.TryGetProperty("text", out var buttonTextProp) ? buttonTextProp.GetString() ?? string.Empty : string.Empty,
+                    Url = buttonElement.TryGetProperty("url", out var urlProp) && urlProp.ValueKind == JsonValueKind.String ? urlProp.GetString() : null,
+                    PhoneNumber = buttonElement.TryGetProperty("phone_number", out var phoneProp) && phoneProp.ValueKind == JsonValueKind.String ? phoneProp.GetString() : null
+                });
+            }
+        }
+
+        return new WhatsAppTemplateComponent
+        {
+            Type = type switch
+            {
+                "HEADER" => WhatsAppTemplateComponentType.Header,
+                "BODY" => WhatsAppTemplateComponentType.Body,
+                "FOOTER" => WhatsAppTemplateComponentType.Footer,
+                "BUTTONS" => WhatsAppTemplateComponentType.Buttons,
+                _ => WhatsAppTemplateComponentType.Unknown
+            },
+            Format = componentElement.TryGetProperty("format", out var formatProp) && formatProp.ValueKind == JsonValueKind.String ? formatProp.GetString() : null,
+            Text = text,
+            ParameterCount = CountPositionalParameters(text),
+            Buttons = buttons
+        };
+    }
+
+    /// <summary>
+    /// Cuenta placeholders posicionales distintos (<c>{{1}}</c>, <c>{{2}}</c>, ...) en el texto de
+    /// un componente de plantilla. Devuelve el placeholder de mayor número encontrado (no la
+    /// cantidad de ocurrencias) — es lo que determina cuántos <c>parameters</c> espera Meta, ya que
+    /// los placeholders deben usarse en orden consecutivo desde <c>{{1}}</c>.
+    /// </summary>
+    private static int CountPositionalParameters(string? text)
+    {
+        if (string.IsNullOrEmpty(text))
+        {
+            return 0;
+        }
+
+        var maxIndex = 0;
+        foreach (System.Text.RegularExpressions.Match match in System.Text.RegularExpressions.Regex.Matches(text, @"\{\{(\d+)\}\}"))
+        {
+            if (int.TryParse(match.Groups[1].Value, out var index) && index > maxIndex)
+            {
+                maxIndex = index;
+            }
+        }
+
+        return maxIndex;
+    }
+
+    private static WhatsAppMessageTemplateStatus MapTemplateStatus(string? status) => status switch
+    {
+        "APPROVED" => WhatsAppMessageTemplateStatus.Approved,
+        "PENDING" => WhatsAppMessageTemplateStatus.Pending,
+        "REJECTED" => WhatsAppMessageTemplateStatus.Rejected,
+        "PAUSED" => WhatsAppMessageTemplateStatus.Paused,
+        "DISABLED" => WhatsAppMessageTemplateStatus.Disabled,
+        _ => WhatsAppMessageTemplateStatus.Unknown
+    };
+
+    /// <inheritdoc />
+    public async Task<MResult<bool>> MarkAsReadAsync(string messageId, CancellationToken cancellationToken = default)
+    {
+        var payload = new
+        {
+            messaging_product = "whatsapp",
+            status = "read",
+            message_id = messageId
+        };
+
+        return await SendStatusPayloadAsync(payload, cancellationToken);
+    }
+
+    /// <inheritdoc />
+    public async Task<MResult<bool>> MarkAsReadWithTypingIndicatorAsync(string messageId, CancellationToken cancellationToken = default)
+    {
+        var payload = new
+        {
+            messaging_product = "whatsapp",
+            status = "read",
+            message_id = messageId,
+            typing_indicator = new { type = "text" }
+        };
+
+        return await SendStatusPayloadAsync(payload, cancellationToken);
+    }
+
+    /// <summary>
+    /// Envía un payload de estado (<c>status: "read"</c>, con o sin <c>typing_indicator</c>) al mismo
+    /// endpoint <c>POST /{phone-number-id}/messages</c> que usan los métodos de envío, pero a
+    /// diferencia de <see cref="SendMessagePayloadAsync"/> la respuesta exitosa de Meta no trae un
+    /// <c>messages[0].id</c> (trae <c>{"success": true}</c>) — por eso este helper devuelve
+    /// <see cref="MResult{T}"/> de <see cref="bool"/> en vez de intentar extraer un message id que no
+    /// existe en este tipo de respuesta.
+    /// </summary>
+    private async Task<MResult<bool>> SendStatusPayloadAsync(object payload, CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(_options.AccessToken) || string.IsNullOrWhiteSpace(_options.PhoneNumberId))
+        {
+            return MResult<bool>.Fail("ArjuyWhatsApp no está configurado: falta AccessToken o PhoneNumberId.");
+        }
+
+        return await ExecuteWithRetryAsync<bool>(async () =>
+        {
+            try
+            {
+                var client = _httpClientFactory.CreateClient(HttpClientName);
+                var url = $"https://graph.facebook.com/{_options.ApiVersion}/{_options.PhoneNumberId}/messages";
+
+                using var request = new HttpRequestMessage(HttpMethod.Post, url);
+                request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", _options.AccessToken);
+                request.Content = JsonContent.Create(payload);
+
+                using var response = await client.SendAsync(request, cancellationToken);
+                var body = await response.Content.ReadAsStringAsync(cancellationToken);
+
+                if (!response.IsSuccessStatusCode)
+                {
+                    return (MResult<bool>.Fail(ParseMetaError(response.StatusCode, body)), GetRetryAfterDelay(response));
+                }
+
+                return (MResult<bool>.Success(true), (TimeSpan?)null);
+            }
+            catch (Exception ex)
+            {
+                return (MResult<bool>.Fail(ex.Message), (TimeSpan?)null);
+            }
+        }, cancellationToken);
     }
 
     // -----------------------------------------------------------------------
 
-    private async Task<MResult<string>> SendMessagePayloadAsync(object payload)
+    /// <summary>
+    /// Agrega el componente <c>context.message_id</c> al nivel superior del payload de envío cuando
+    /// <paramref name="replyToMessageId"/> viene informado, para que Meta muestre el mensaje enviado
+    /// como respuesta/cita de un mensaje entrante anterior en el chat del destinatario — formato
+    /// verificado contra la documentación oficial de Meta (Cloud API, "Contextual Replies") al
+    /// 2026-09-19: <c>context</c> es genérico, va al mismo nivel que <c>to</c>/<c>type</c> sin
+    /// importar el tipo de mensaje (texto, template, media, interactivo). Si
+    /// <paramref name="replyToMessageId"/> es <c>null</c> o vacío, devuelve <paramref name="payload"/>
+    /// sin modificar (sin campo <c>context</c> en el body enviado).
+    /// </summary>
+    private static object BuildRequestPayload(object payload, string? replyToMessageId)
+    {
+        if (string.IsNullOrWhiteSpace(replyToMessageId))
+        {
+            return payload;
+        }
+
+        var node = JsonSerializer.SerializeToNode(payload) as JsonObject
+            ?? throw new InvalidOperationException("El payload de envío no se pudo serializar a un objeto JSON.");
+
+        node["context"] = new JsonObject { ["message_id"] = replyToMessageId };
+
+        return node;
+    }
+
+    private async Task<MResult<string>> SendMessagePayloadAsync(object payload, string? replyToMessageId = null, CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(_options.AccessToken) || string.IsNullOrWhiteSpace(_options.PhoneNumberId))
         {
             return MResult<string>.Fail("ArjuyWhatsApp no está configurado: falta AccessToken o PhoneNumberId.");
         }
 
-        try
+        return await ExecuteWithRetryAsync<string>(async () =>
         {
-            var client = _httpClientFactory.CreateClient(HttpClientName);
-            var url = $"https://graph.facebook.com/{_options.ApiVersion}/{_options.PhoneNumberId}/messages";
-
-            using var request = new HttpRequestMessage(HttpMethod.Post, url);
-            request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", _options.AccessToken);
-            request.Content = JsonContent.Create(payload);
-
-            // TODO: Meta aplica rate-limiting sobre este endpoint (respuesta 429 con header Retry-After).
-            // Esta versión no implementa retry/backoff automático — queda pendiente para una futura iteración
-            // (ver README, sección Roadmap / Pendiente).
-            using var response = await client.SendAsync(request);
-            var body = await response.Content.ReadAsStringAsync();
-
-            if (!response.IsSuccessStatusCode)
+            try
             {
-                return MResult<string>.Fail($"Error Meta API ({(int)response.StatusCode}): {body}");
+                var client = _httpClientFactory.CreateClient(HttpClientName);
+                var url = $"https://graph.facebook.com/{_options.ApiVersion}/{_options.PhoneNumberId}/messages";
+
+                using var request = new HttpRequestMessage(HttpMethod.Post, url);
+                request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", _options.AccessToken);
+                request.Content = JsonContent.Create(BuildRequestPayload(payload, replyToMessageId));
+
+                using var response = await client.SendAsync(request, cancellationToken);
+                var body = await response.Content.ReadAsStringAsync(cancellationToken);
+
+                if (!response.IsSuccessStatusCode)
+                {
+                    return (MResult<string>.Fail(ParseMetaError(response.StatusCode, body)), GetRetryAfterDelay(response));
+                }
+
+                var messageId = ExtractMessageId(body);
+                return (MResult<string>.Success(messageId ?? string.Empty), (TimeSpan?)null);
+            }
+            catch (Exception ex)
+            {
+                return (MResult<string>.Fail(ex.Message), (TimeSpan?)null);
+            }
+        }, cancellationToken);
+    }
+
+    /// <summary>
+    /// Ejecuta <paramref name="operation"/> con retry y backoff exponencial: si el resultado es un
+    /// fallo cuyo <see cref="MetaApiError.IsTransient"/> es <c>true</c> (rate limiting HTTP 429 o
+    /// error 5xx de Meta), reintenta hasta <see cref="ArjuyWhatsAppOptions.MaxRetryAttempts"/> veces
+    /// antes de devolver el último resultado tal cual. Errores no transitorios (400, 401, 403,
+    /// validaciones locales sin <see cref="MetaApiError"/>) se devuelven en el primer intento, sin
+    /// reintentar. <paramref name="operation"/> devuelve, junto con el <see cref="MResult{T}"/>, un
+    /// delay opcional tomado del header <c>Retry-After</c> de la respuesta de Meta — cuando viene
+    /// presente, se usa ese delay exacto en vez del backoff calculado.
+    /// </summary>
+    private async Task<MResult<T>> ExecuteWithRetryAsync<T>(Func<Task<(MResult<T> Result, TimeSpan? RetryAfter)>> operation, CancellationToken cancellationToken = default)
+    {
+        var retryIndex = 0;
+
+        while (true)
+        {
+            var (result, retryAfter) = await operation();
+
+            if (result.IsSuccess || result.Error?.IsTransient != true || retryIndex >= _options.MaxRetryAttempts)
+            {
+                return result;
             }
 
-            var messageId = ExtractMessageId(body);
-            return MResult<string>.Success(messageId ?? string.Empty);
+            var delay = retryAfter ?? ComputeBackoffDelay(retryIndex);
+            retryIndex++;
+
+            _logger.LogWarning(
+                "ArjuyWhatsApp: reintento {RetryIndex}/{MaxRetryAttempts} tras error transitorio de Meta (HTTP {StatusCode}) — esperando {DelayMs}ms",
+                retryIndex, _options.MaxRetryAttempts, result.Error!.HttpStatusCode, delay.TotalMilliseconds);
+
+            await Task.Delay(delay, cancellationToken);
         }
-        catch (Exception ex)
+    }
+
+    /// <summary>
+    /// Calcula el delay del reintento número <paramref name="retryIndex"/> (0-indexado) con backoff
+    /// exponencial en base a <see cref="ArjuyWhatsAppOptions.BaseRetryDelay"/> (<c>BaseRetryDelay *
+    /// 2^retryIndex</c>), con jitter aleatorio de ±20% para evitar que múltiples instancias
+    /// reintenten todas al mismo tiempo (efecto "thundering herd").
+    /// </summary>
+    private TimeSpan ComputeBackoffDelay(int retryIndex)
+    {
+        var exponentialMs = _options.BaseRetryDelay.TotalMilliseconds * Math.Pow(2, retryIndex);
+        var jitterFactor = 1 + ((Random.Shared.NextDouble() * 0.4) - 0.2); // uniforme en [0.8, 1.2]
+        return TimeSpan.FromMilliseconds(exponentialMs * jitterFactor);
+    }
+
+    /// <summary>
+    /// Extrae el delay del header <c>Retry-After</c> de una respuesta HTTP, si vino presente —
+    /// soporta tanto la forma en segundos (<c>Retry-After: 30</c>) como la de fecha HTTP
+    /// (<c>Retry-After: Wed, 21 Oct 2026 07:28:00 GMT</c>). Cuando Meta lo manda en una respuesta
+    /// 429, tiene prioridad sobre el backoff calculado — es la propia Meta indicando cuánto esperar.
+    /// </summary>
+    private static TimeSpan? GetRetryAfterDelay(HttpResponseMessage response)
+    {
+        var retryAfter = response.Headers.RetryAfter;
+        if (retryAfter == null)
         {
-            return MResult<string>.Fail(ex.Message);
+            return null;
         }
+
+        if (retryAfter.Delta.HasValue)
+        {
+            return retryAfter.Delta.Value;
+        }
+
+        if (retryAfter.Date.HasValue)
+        {
+            var delay = retryAfter.Date.Value - DateTimeOffset.UtcNow;
+            return delay > TimeSpan.Zero ? delay : TimeSpan.Zero;
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Parsea el objeto <c>error</c> del body de una respuesta no exitosa de la Graph API de Meta en
+    /// un <see cref="MetaApiError"/>. Tolerante a que el body no sea JSON válido o no tenga la forma
+    /// esperada (por ejemplo, un error de infraestructura de Meta que devuelva HTML o texto plano en
+    /// vez del JSON documentado) — en esos casos devuelve un <see cref="MetaApiError"/> con
+    /// <see cref="MetaApiError.Message"/> igual al body crudo y el resto de los campos en <c>null</c>,
+    /// para no perder la información aunque no se pueda estructurar.
+    /// </summary>
+    private static MetaApiError ParseMetaError(HttpStatusCode statusCode, string body)
+    {
+        try
+        {
+            using var doc = JsonDocument.Parse(body);
+            if (doc.RootElement.TryGetProperty("error", out var errorElement))
+            {
+                var message = errorElement.TryGetProperty("message", out var messageProp)
+                    ? messageProp.GetString() ?? body
+                    : body;
+                var code = errorElement.TryGetProperty("code", out var codeProp) && codeProp.ValueKind == JsonValueKind.Number
+                    ? codeProp.GetInt32()
+                    : (int?)null;
+                var errorSubcode = errorElement.TryGetProperty("error_subcode", out var subcodeProp) && subcodeProp.ValueKind == JsonValueKind.Number
+                    ? subcodeProp.GetInt32()
+                    : (int?)null;
+                var type = errorElement.TryGetProperty("type", out var typeProp)
+                    ? typeProp.GetString()
+                    : null;
+                var fbTraceId = errorElement.TryGetProperty("fbtrace_id", out var traceProp)
+                    ? traceProp.GetString()
+                    : null;
+
+                return new MetaApiError((int)statusCode, body, message, code, errorSubcode, type, fbTraceId);
+            }
+        }
+        catch (JsonException)
+        {
+            // Body no es JSON válido (o no tiene la forma esperada) — se cae al fallback de abajo.
+        }
+
+        return new MetaApiError((int)statusCode, body, body);
     }
 
     private static string? ExtractMessageId(string responseBody)

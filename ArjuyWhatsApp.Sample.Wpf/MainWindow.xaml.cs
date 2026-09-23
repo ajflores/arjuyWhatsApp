@@ -1,7 +1,45 @@
 using System.Collections.ObjectModel;
+using System.ComponentModel;
 using System.Windows;
 
 namespace ArjuyWhatsApp.Sample.Wpf;
+
+/// <summary>
+/// Estado de entrega de un mensaje que ESTE sample mandó, trackeado por <see cref="MessageId"/>
+/// para poder actualizarlo cuando llega un evento <see cref="IArjuyWhatsAppClient.MessageStatusUpdated"/>.
+/// Implementa <see cref="INotifyPropertyChanged"/> porque, a diferencia de un <c>Add</c> a la
+/// <see cref="ObservableCollection{T}"/> (que WPF sí detecta solo), actualizar <see cref="Status"/>
+/// de un item YA agregado no dispara notificación de UI por sí mismo — sin esto, el ✓✓ nunca se
+/// actualizaría en pantalla aunque el dato cambie por dentro.
+/// </summary>
+public class SentMessageStatus : INotifyPropertyChanged
+{
+    private string _status = "✓ enviado";
+
+    public string MessageId { get; }
+
+    public string Status
+    {
+        get => _status;
+        set
+        {
+            if (_status == value)
+            {
+                return;
+            }
+
+            _status = value;
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(Status)));
+        }
+    }
+
+    public SentMessageStatus(string messageId)
+    {
+        MessageId = messageId;
+    }
+
+    public event PropertyChangedEventHandler? PropertyChanged;
+}
 
 /// <summary>
 /// Ventana principal del sample: envía mensajes de texto vía <see cref="IArjuyWhatsAppClient"/>
@@ -17,6 +55,12 @@ public partial class MainWindow : Window
     /// por eso el DataContext de la ventana se setea a "this" en el constructor.
     /// </summary>
     public ObservableCollection<WhatsAppMessageReceived> MensajesRecibidos { get; } = new();
+
+    /// <summary>
+    /// Mensajes que ESTE sample mandó, con su estado de entrega (✓ enviado / ✓✓ entregado / ✓✓
+    /// leído / ✗ falló) actualizado en vivo desde <see cref="OnMessageStatusUpdated"/>.
+    /// </summary>
+    public ObservableCollection<SentMessageStatus> MensajesEnviados { get; } = new();
 
     public MainWindow(IArjuyWhatsAppClient whatsAppClient)
     {
@@ -53,6 +97,13 @@ public partial class MainWindow : Window
             lblResultado.Text = result.IsSuccess
                 ? $"Enviado. Message id: {result.Data}"
                 : $"Error: {result.Message}";
+
+            if (result.IsSuccess && result.Data is not null)
+            {
+                // Trackeamos el mensaje recién enviado por su MessageId para poder pintarle
+                // el estado de entrega cuando llegue el evento MessageStatusUpdated más abajo.
+                MensajesEnviados.Add(new SentMessageStatus(result.Data));
+            }
         }
         finally
         {
@@ -83,5 +134,55 @@ public partial class MainWindow : Window
 
         // ⚠️ Estamos en el thread de background de Kestrel: no tocar MensajesRecibidos directo.
         Application.Current.Dispatcher.InvokeAsync(() => MensajesRecibidos.Add(message));
+
+        // Best-effort: marcamos el mensaje como leído en Meta (✓✓ azul del lado del remitente).
+        // "Fire and forget" a propósito — este handler no es async y no hay nada más que hacer
+        // acá si falla (Meta lo tolera, no es crítico para el flujo de recepción).
+        _ = MarkAsReadBestEffortAsync(message.MessageId);
+    }
+
+    private async Task MarkAsReadBestEffortAsync(string messageId)
+    {
+        try
+        {
+            await _whatsAppClient.MarkAsReadAsync(messageId);
+        }
+        catch
+        {
+            // Best-effort: un fallo acá (red, token vencido, etc.) no debe tirar abajo la
+            // recepción del mensaje, que ya se mostró en MensajesRecibidos igual.
+        }
+    }
+
+    /// <summary>
+    /// Suscripto a <see cref="IArjuyWhatsAppClient.MessageStatusUpdated"/> desde App.xaml.cs.
+    /// Mismo problema de threading que <see cref="OnMessageReceived"/> — este evento también se
+    /// dispara desde el thread de background de Kestrel, así que marshaleamos con
+    /// Dispatcher.InvokeAsync antes de tocar <see cref="MensajesEnviados"/>.
+    /// </summary>
+    public void OnMessageStatusUpdated(object? sender, WhatsAppMessageStatusUpdateEventArgs e)
+    {
+        var statusUpdate = e.StatusUpdate;
+
+        Application.Current.Dispatcher.InvokeAsync(() =>
+        {
+            var tracked = MensajesEnviados.FirstOrDefault(m => m.MessageId == statusUpdate.MessageId);
+            if (tracked is null)
+            {
+                // Puede pasar si la ventana se reinició entre el envío y este evento, o si el
+                // mensaje fue mandado por otro proceso/sesión — no es un error, simplemente no
+                // hay nada que actualizar en esta instancia de la UI.
+                return;
+            }
+
+            tracked.Status = statusUpdate.Status switch
+            {
+                WhatsAppMessageStatus.Sent => "✓ enviado",
+                WhatsAppMessageStatus.Delivered => "✓✓ entregado",
+                WhatsAppMessageStatus.Read => "✓✓ leído",
+                WhatsAppMessageStatus.Failed => $"✗ falló ({statusUpdate.ErrorMessage})",
+                _ => tracked.Status
+            };
+        });
     }
 }

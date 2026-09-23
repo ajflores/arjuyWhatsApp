@@ -86,6 +86,7 @@ registro comentadas en `Program.cs`.
 |---|---|
 | `Task<MResult<string>> SendTextAsync(string phoneNumber, string message)` | Envía un mensaje de texto libre. Devuelve el `message id` de Meta en `Data`. |
 | `Task<MResult<string>> SendTemplateAsync(string phoneNumber, string templateName, string languageCode, IEnumerable<string> parameters)` | Envía un mensaje basado en una plantilla aprobada, con parámetros posicionales del body. |
+| `Task<MResult<string>> SendTemplateAsync(string phoneNumber, string templateName, string languageCode, IEnumerable<string> bodyParameters, WhatsAppTemplateHeaderMedia? headerMedia, IEnumerable<WhatsAppTemplateButtonParameter>? buttonParameters = null)` | Overload de `SendTemplateAsync` con soporte para header dinámico de media (imagen/video/documento, por URL o `media_id`) y/o botones dinámicos (URL con placeholder o quick reply) — para plantillas con solo body, preferí el overload de 4 parámetros. `headerMedia` es obligatorio en este overload (pasá `null` explícito si la plantilla no tiene header dinámico) para que el compilador pueda elegir sin ambigüedad entre los dos overloads cuando se llama con los 4 parámetros básicos. |
 | `Task<MResult<string>> SendImageAsync(string phoneNumber, string imageUrl, string? caption = null)` | Envía una imagen por URL pública, con caption opcional. |
 | `Task<MResult<string>> SendDocumentAsync(string phoneNumber, string documentUrl, string fileName, string? caption = null)` | Envía un documento por URL pública, con nombre de archivo y caption opcional. |
 | `Task<MResult<byte[]>> DownloadMediaAsync(string mediaId)` | Descarga el binario de un media id (por ejemplo, el recibido en un webhook entrante). |
@@ -94,6 +95,18 @@ registro comentadas en `Program.cs`.
 | `Task<MResult<string>> SendDocumentByMediaIdAsync(string phoneNumber, string mediaId, string? fileName = null, string? caption = null)` | Envía un documento previamente subido con `UploadMediaAsync`, referenciándolo por `media_id` en vez de por URL. |
 | `Task<MResult<string>> SendInteractiveButtonsAsync(string phoneNumber, string bodyText, IEnumerable<(string Id, string Title)> buttons)` | Envía un mensaje con hasta 3 botones de respuesta rápida. Valida los límites de Meta (máximo 3 botones, título ≤ 20 caracteres, títulos únicos) antes de llamar a la API. Ver `MANUAL.md`, sección "Mensajes interactivos". |
 | `Task<MResult<string>> SendInteractiveListAsync(string phoneNumber, string bodyText, string buttonText, IEnumerable<(string SectionTitle, IEnumerable<(string Id, string Title, string? Description)> Rows)> sections)` | Envía un menú desplegable con secciones y filas (hasta 10 filas en total). Valida los límites de Meta antes de llamar a la API. Ver `MANUAL.md`, sección "Mensajes interactivos". |
+| `Task<MResult<IReadOnlyList<WhatsAppMessageTemplate>>> GetMessageTemplatesAsync(CancellationToken cancellationToken = default)` | Lista todas las plantillas de mensaje de la cuenta (`ArjuyWhatsAppOptions.BusinessAccountId`), siguiendo automáticamente la paginación de Meta. Cada `WhatsAppMessageTemplate` trae sus componentes (header/body/footer/buttons) y `BodyParameterCount`, para saber cuántos `parameters` pasarle a `SendTemplateAsync` sin ir a copiarlos del panel de Meta. |
+| `Task<MResult<bool>> MarkAsReadAsync(string messageId, CancellationToken cancellationToken = default)` | Marca un mensaje entrante como leído (doble tilde azul). Meta solo lo permite dentro de los 30 días de recibido el mensaje. |
+| `Task<MResult<bool>> MarkAsReadWithTypingIndicatorAsync(string messageId, CancellationToken cancellationToken = default)` | Igual que `MarkAsReadAsync`, pero además muestra el indicador de "escribiendo..." — Meta lo descarta al responder o a los 25 segundos, lo que ocurra primero. Usar solo si efectivamente se va a responder a continuación. |
+| `Task<MResult<string>> SendReactionAsync(string phoneNumber, string messageId, string emoji, CancellationToken cancellationToken = default)` | Reacciona con un emoji a un mensaje. Pasar `emoji: ""` remueve una reacción puesta anteriormente (mecanismo oficial de Meta para "unreact"). No admite `replyToMessageId` — no aplica según Meta. |
+| `Task<MResult<string>> SendLocationAsync(string phoneNumber, double latitude, double longitude, string? name = null, string? address = null, string? replyToMessageId = null, CancellationToken cancellationToken = default)` | Envía una ubicación (coordenadas, con nombre y dirección opcionales). |
+| `Task<MResult<string>> SendContactsAsync(string phoneNumber, IEnumerable<WhatsAppContact> contacts, string? replyToMessageId = null, CancellationToken cancellationToken = default)` | Envía una o más tarjetas de contacto (`WhatsAppContact`, equivalente a una vCard simplificada, incluye `Urls`). Solo `Name.FormattedName` es obligatorio por contacto — se valida localmente antes de llamar a Meta. |
+| `Task<MResult<string>> SendAudioAsync(string phoneNumber, string audioUrl, bool voice = false, string? replyToMessageId = null, CancellationToken cancellationToken = default)` | Envía un audio por URL pública. `voice: true` lo muestra como nota de voz (requiere OGG/Opus mono). Meta NO admite `caption` en audio. |
+| `Task<MResult<string>> SendAudioByMediaIdAsync(string phoneNumber, string mediaId, bool voice = false, string? replyToMessageId = null, CancellationToken cancellationToken = default)` | Igual que `SendAudioAsync`, referenciando un audio ya subido con `UploadMediaAsync` por `media_id`. |
+| `Task<MResult<string>> SendVideoAsync(string phoneNumber, string videoUrl, string? caption = null, string? replyToMessageId = null, CancellationToken cancellationToken = default)` | Envía un video por URL pública, con caption opcional. |
+| `Task<MResult<string>> SendVideoByMediaIdAsync(string phoneNumber, string mediaId, string? caption = null, string? replyToMessageId = null, CancellationToken cancellationToken = default)` | Igual que `SendVideoAsync`, referenciando un video ya subido por `media_id`. |
+| `Task<MResult<string>> SendStickerAsync(string phoneNumber, string stickerUrl, string? replyToMessageId = null, CancellationToken cancellationToken = default)` | Envía un sticker por URL pública. Meta exige WebP (estático ≤100KB, animado ≤500KB, no validado localmente). No admite `caption`. |
+| `Task<MResult<string>> SendStickerByMediaIdAsync(string phoneNumber, string mediaId, string? replyToMessageId = null, CancellationToken cancellationToken = default)` | Igual que `SendStickerAsync`, referenciando un sticker ya subido por `media_id`. |
 | `string? VerifyWebhookChallenge(string mode, string verifyToken, string challenge)` | Resuelve el handshake `GET` de verificación del webhook contra `ArjuyWhatsAppOptions.VerifyToken`. |
 | `Task<MResult<bool>> ProcessWebhookAsync(string rawBody, string? signatureHeader, CancellationToken cancellationToken = default)` | Valida la firma HMAC del `POST` entrante, parsea el payload de Meta, y entrega cada mensaje vía el evento `MessageReceived`/`IWhatsAppMessageHandler` y cada actualización de estado de entrega vía `MessageStatusUpdated`/`IWhatsAppStatusHandler`. |
 | `event EventHandler<WhatsAppMessageReceivedEventArgs>? MessageReceived` | Se dispara por cada mensaje entrante procesado por `ProcessWebhookAsync`. |
@@ -104,33 +117,101 @@ autocontenido (`IsSuccess`, `Data`, `Message`), sin excepciones para el flujo no
 excepciones de red/HTTP se capturan internamente y se traducen a `MResult.Fail(...)`. Ver
 `MANUAL.md`, sección 3, para el flujo completo de recepción de mensajes vía webhook.
 
-## Normalización de números de teléfono
-
-El cliente expone un hook protegido:
+**Responder citando un mensaje (`context.message_id`)**: todos los métodos de envío de contenido
+(`SendTextAsync`, ambos overloads de `SendTemplateAsync`, `SendImageAsync`, `SendDocumentAsync`,
+`SendImageByMediaIdAsync`, `SendDocumentByMediaIdAsync`, `SendAudioAsync`/`SendAudioByMediaIdAsync`,
+`SendVideoAsync`/`SendVideoByMediaIdAsync`, `SendStickerAsync`/`SendStickerByMediaIdAsync`,
+`SendLocationAsync`, `SendContactsAsync`, `SendInteractiveButtonsAsync`, `SendInteractiveListAsync`)
+aceptan un parámetro opcional `replyToMessageId` al final de la firma (excepción: `SendReactionAsync`
+no lo admite — la reacción ya referencia en sí misma al mensaje reaccionado).
+Pasale el `wamid.` de un mensaje entrante (el mismo valor de `WhatsAppMessageReceived.MessageId`)
+para que WhatsApp muestre el mensaje enviado como respuesta/cita de ese mensaje en el chat del
+destinatario. Si se omite, el mensaje se envía sin contexto, como hasta ahora.
 
 ```csharp
-protected virtual string NormalizePhoneNumber(string phoneNumber)
+await whatsAppClient.SendTextAsync("5491100000000", "¡Gracias por tu consulta!", replyToMessageId: mensajeEntrante.MessageId);
 ```
 
-La implementación por defecto solo recorta espacios en blanco — **no** aplica ninguna regla
-específica de país (por ejemplo, el "9" móvil de Argentina). Si tu aplicación necesita ese tipo
-de normalización, heredá de `ArjuyWhatsAppClient` y sobreescribí el método:
+### Errores estructurados de Meta (`MResult.Error` / `MetaApiError`)
+
+Cuando un `Fail` viene de una respuesta no exitosa de la Graph API (no de una validación local, como
+los límites de botones/listas o falta de configuración), `MResult.Error` trae un `MetaApiError` con
+el `code`, `error_subcode`, `type`, `fbtrace_id` y el body crudo que devolvió Meta — además del
+`Message` de siempre, que sigue poblado para no romper a quien solo lo lee. Esto permite distinguir
+programáticamente, por ejemplo, un número sin WhatsApp de un token vencido o de un rate limit, sin
+tener que parsear el string de error a mano:
 
 ```csharp
-public class ArjuyWhatsAppClientArgentina : ArjuyWhatsAppClient
-{
-    public ArjuyWhatsAppClientArgentina(IHttpClientFactory httpClientFactory, IOptions<ArjuyWhatsAppOptions> options)
-        : base(httpClientFactory, options) { }
+var result = await whatsAppClient.SendTextAsync("5491100000000", "Hola");
 
-    protected override string NormalizePhoneNumber(string phoneNumber)
-    {
-        // Reglas específicas de tu país/proveedor acá.
-        return phoneNumber.Trim();
-    }
+if (!result.IsSuccess && result.Error is { IsRateLimited: true })
+{
+    // No hace falta manejarlo a mano en general — ver "Retry automático" más abajo, la librería
+    // ya reintenta sola los errores transitorios. Este chequeo sirve para lógica adicional propia
+    // (por ejemplo, encolar el mensaje para reintentar más tarde si se agotaron los reintentos).
 }
 ```
 
-Y registrá tu clase derivada en el contenedor de DI en lugar de `ArjuyWhatsAppClient`.
+`Error` es `null` cuando el resultado es exitoso o cuando el fallo es de validación local de la
+librería (esos casos siguen usando `MResult.Fail(string)`, sin un error de Meta detrás).
+
+## Retry automático con backoff exponencial
+
+Ante un error transitorio de Meta (`MetaApiError.IsTransient` — rate limiting HTTP 429 o error 5xx
+del lado de Meta), la librería reintenta automáticamente antes de devolver el `MResult.Fail`. Los
+errores no transitorios (400, 401, 403, y las validaciones locales de botones/listas) **nunca** se
+reintentan — no tiene sentido reintentar algo que va a fallar exactamente igual.
+
+```json
+{
+  "ArjuyWhatsApp": {
+    "MaxRetryAttempts": 3,
+    "BaseRetryDelay": "00:00:00.500"
+  }
+}
+```
+
+- `MaxRetryAttempts` (default `3`): cantidad de reintentos, sin contar el intento inicial. `0`
+  desactiva el retry por completo.
+- `BaseRetryDelay` (default `500ms`): delay base del backoff exponencial — el reintento *N* espera
+  `BaseRetryDelay * 2^(N-1)` con jitter aleatorio de ±20% (para no sincronizar reintentos entre
+  varias instancias corriendo en paralelo). Con el default: ~500ms, ~1s, ~2s.
+- Si la respuesta 429 de Meta trae el header `Retry-After`, ese valor se usa en vez del backoff
+  calculado — Meta te está diciendo explícitamente cuánto esperar.
+
+Aplica a todos los métodos que llaman a la Graph API (envío de mensajes, `UploadMediaAsync`,
+`DownloadMediaAsync`). Agotados los reintentos, se devuelve el último `MResult.Fail` tal cual,
+con el `MetaApiError` real de Meta.
+
+## Normalización de números de teléfono
+
+La normalización del número de destino (campo `"to"` del payload) es una estrategia inyectable,
+`IPhoneNumberNormalizer`, no un método para heredar. La librería trae dos implementaciones
+built-in y elige una automáticamente según `ArjuyWhatsAppOptions.CountryCode`:
+
+- `"AR"` → `ArgentinaPhoneNumberNormalizer` — resuelve el "9" móvil de Argentina (va inmediatamente
+  después del código de país `54`, no al final) y el "15" del marcado local de celular. Ver el XML
+  doc de la clase para la limitación conocida sobre códigos de área de más de 2 dígitos.
+- Cualquier otro valor (o sin configurar) → `DefaultPhoneNumberNormalizer` — solo recorta espacios,
+  sin ninguna transformación adicional (comportamiento histórico de la librería).
+
+```json
+{
+  "ArjuyWhatsApp": {
+    "CountryCode": "AR"
+  }
+}
+```
+
+Si necesitás una regla propia (otro país, o una tabla de códigos de área más precisa que la
+built-in de Argentina), registrá tu propia implementación en el contenedor de DI **antes** de
+llamar a `AddArjuyWhatsApp` — la librería usa `TryAddSingleton`, así que tu registración gana y el
+`CountryCode` de las opciones se ignora:
+
+```csharp
+services.AddSingleton<IPhoneNumberNormalizer, MiNormalizadorPropio>();
+services.AddArjuyWhatsApp(builder.Configuration);
+```
 
 ## Target framework choice
 
@@ -157,13 +238,8 @@ sin romper a los consumidores actuales.
 Estas funcionalidades quedaron **explícitamente fuera de esta primera versión** y son las
 primeras candidatas para una futura iteración:
 
-1. **Retry / rate-limiting (HTTP 429)**: Meta puede responder `429 Too Many Requests` con un
-   header `Retry-After`. Esta versión no implementa reintentos ni backoff automático — el llamador
-   recibe un `MResult.Fail` con el detalle del error y debe manejarlo por su cuenta. Marcado
-   con `// TODO:` en `ArjuyWhatsAppClient.SendMessagePayloadAsync`.
-2. **Normalización de número de teléfono generalizada**: actualmente solo existe el hook
-   `NormalizePhoneNumber` (ver sección de arriba) con una implementación por defecto no-op. No hay
-   reglas built-in por país/proveedor — queda a cargo de cada consumidor extender la clase.
+1. Audio/video/sticker con helpers dedicados por URL o `media_id` (hoy solo imagen/documento los
+   tienen — para el resto de tipos hay que armar el payload genérico a mano).
 
 ## Estructura del repositorio
 

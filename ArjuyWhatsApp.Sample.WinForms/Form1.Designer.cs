@@ -36,6 +36,8 @@ namespace ArjuyWhatsApp.Sample.WinForms
             this.lblResultado = new System.Windows.Forms.Label();
             this.lblRecibidos = new System.Windows.Forms.Label();
             this.lstMensajes = new System.Windows.Forms.ListBox();
+            this.lblEnviados = new System.Windows.Forms.Label();
+            this.lstEnviados = new System.Windows.Forms.ListBox();
             this.SuspendLayout();
             //
             // lblNumero
@@ -89,14 +91,38 @@ namespace ArjuyWhatsApp.Sample.WinForms
             this.lblResultado.Size = new System.Drawing.Size(428, 40);
             this.lblResultado.TabIndex = 5;
             //
+            // lblEnviados
+            //
+            this.lblEnviados.AutoSize = true;
+            this.lblEnviados.Font = new System.Drawing.Font("Segoe UI", 9F, System.Drawing.FontStyle.Bold);
+            this.lblEnviados.Location = new System.Drawing.Point(12, 160);
+            this.lblEnviados.Name = "lblEnviados";
+            this.lblEnviados.Size = new System.Drawing.Size(160, 15);
+            this.lblEnviados.TabIndex = 6;
+            this.lblEnviados.Text = "Mensajes enviados:";
+            //
+            // lstEnviados
+            //
+            // Muestra, además del texto enviado, el estado de entrega más reciente reportado por
+            // MessageStatusUpdated (✓ enviado / ✓✓ entregado / ✓✓ leído / ✗ falló) — ver
+            // Form1.OnMessageStatusUpdated. El índice de cada item se trackea en
+            // _sentMessageListIndexByMessageId para poder actualizarlo in-place.
+            this.lstEnviados.FormattingEnabled = true;
+            this.lstEnviados.HorizontalScrollbar = true;
+            this.lstEnviados.ItemHeight = 15;
+            this.lstEnviados.Location = new System.Drawing.Point(12, 182);
+            this.lstEnviados.Name = "lstEnviados";
+            this.lstEnviados.Size = new System.Drawing.Size(428, 120);
+            this.lstEnviados.TabIndex = 7;
+            //
             // lblRecibidos
             //
             this.lblRecibidos.AutoSize = true;
             this.lblRecibidos.Font = new System.Drawing.Font("Segoe UI", 9F, System.Drawing.FontStyle.Bold);
-            this.lblRecibidos.Location = new System.Drawing.Point(12, 160);
+            this.lblRecibidos.Location = new System.Drawing.Point(12, 312);
             this.lblRecibidos.Name = "lblRecibidos";
             this.lblRecibidos.Size = new System.Drawing.Size(179, 15);
-            this.lblRecibidos.TabIndex = 6;
+            this.lblRecibidos.TabIndex = 8;
             this.lblRecibidos.Text = "Mensajes recibidos (webhook):";
             //
             // lstMensajes
@@ -104,18 +130,20 @@ namespace ArjuyWhatsApp.Sample.WinForms
             this.lstMensajes.FormattingEnabled = true;
             this.lstMensajes.HorizontalScrollbar = true;
             this.lstMensajes.ItemHeight = 15;
-            this.lstMensajes.Location = new System.Drawing.Point(12, 182);
+            this.lstMensajes.Location = new System.Drawing.Point(12, 334);
             this.lstMensajes.Name = "lstMensajes";
             this.lstMensajes.Size = new System.Drawing.Size(428, 244);
-            this.lstMensajes.TabIndex = 7;
+            this.lstMensajes.TabIndex = 9;
             //
             // Form1
             //
             this.AutoScaleDimensions = new System.Drawing.SizeF(7F, 15F);
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
-            this.ClientSize = new System.Drawing.Size(452, 438);
+            this.ClientSize = new System.Drawing.Size(452, 590);
             this.Controls.Add(this.lstMensajes);
             this.Controls.Add(this.lblRecibidos);
+            this.Controls.Add(this.lstEnviados);
+            this.Controls.Add(this.lblEnviados);
             this.Controls.Add(this.lblResultado);
             this.Controls.Add(this.btnEnviar);
             this.Controls.Add(this.txtMensaje);
@@ -138,5 +166,7 @@ namespace ArjuyWhatsApp.Sample.WinForms
         private System.Windows.Forms.Label lblResultado;
         private System.Windows.Forms.Label lblRecibidos;
         private System.Windows.Forms.ListBox lstMensajes;
+        private System.Windows.Forms.Label lblEnviados;
+        private System.Windows.Forms.ListBox lstEnviados;
     }
 }

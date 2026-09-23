@@ -1,5 +1,7 @@
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Options;
 
 namespace ArjuyWhatsApp;
 
@@ -60,6 +62,21 @@ public static class ServiceCollectionExtensions
     private static void RegisterClient(IServiceCollection services)
     {
         services.AddHttpClient(ArjuyWhatsAppClient.HttpClientName);
+
+        // TryAdd: si el consumidor ya registró su propio IPhoneNumberNormalizer (por ejemplo con
+        // una tabla de códigos de área más precisa que la de ArgentinaPhoneNumberNormalizer, o
+        // para un país sin normalizador built-in), esa registración gana y esta no hace nada.
+        services.TryAddSingleton<IPhoneNumberNormalizer>(serviceProvider =>
+        {
+            var countryCode = serviceProvider.GetRequiredService<IOptions<ArjuyWhatsAppOptions>>().Value.CountryCode;
+
+            return countryCode?.Trim().ToUpperInvariant() switch
+            {
+                "AR" => new ArgentinaPhoneNumberNormalizer(),
+                _ => new DefaultPhoneNumberNormalizer()
+            };
+        });
+
         services.AddSingleton<IArjuyWhatsAppClient, ArjuyWhatsAppClient>();
     }
 }

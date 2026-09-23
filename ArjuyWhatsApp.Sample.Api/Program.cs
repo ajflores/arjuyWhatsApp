@@ -32,6 +32,11 @@ builder.Services.AddArjuyWhatsApp(builder.Configuration);
 // ProcessWebhookAsync, junto con el evento MessageReceived (mecanismo 2, ver más abajo).
 builder.Services.AddScoped<IWhatsAppMessageHandler, LoggingMessageHandler>();
 
+// Igual que arriba, pero para actualizaciones de ESTADO de entrega (sent/delivered/read/failed) de
+// mensajes salientes, vía IWhatsAppStatusHandler — contrato separado de IWhatsAppMessageHandler
+// porque son eventos de dominio distintos (ver XML doc de IWhatsAppStatusHandler).
+builder.Services.AddScoped<IWhatsAppStatusHandler, LoggingStatusHandler>();
+
 var app = builder.Build();
 
 app.UseSwagger();
@@ -58,6 +63,19 @@ whatsAppClient.MessageReceived += (sender, args) =>
         message.From, message.Type, message.MessageId, message.Text);
 };
 
+// Mecanismo 2 (equivalente para estados): evento MessageStatusUpdated, conviviendo con el handler
+// por DI (LoggingStatusHandler, registrado arriba) — mismo patrón que MessageReceived.
+var statusEventLogger = app.Services.GetRequiredService<ILoggerFactory>().CreateLogger("MessageStatusUpdatedEvent");
+
+whatsAppClient.MessageStatusUpdated += (sender, args) =>
+{
+    // 🔴 PONÉ UN BREAKPOINT ACÁ para inspeccionar la actualización de estado por EVENTO
+    var status = args.StatusUpdate;
+    statusEventLogger.LogInformation(
+        "[EVENTO MessageStatusUpdated] Mensaje {MessageId} a {RecipientPhoneNumber}: {Status}",
+        status.MessageId, status.RecipientPhoneNumber, status.Status);
+};
+
 app.Run();
 
 /// <summary>
@@ -80,6 +98,38 @@ public class LoggingMessageHandler : IWhatsAppMessageHandler
         _logger.LogInformation(
             "[DI IWhatsAppMessageHandler] Mensaje de {From} ({Type}, id {MessageId}): {Text}",
             message.From, message.Type, message.MessageId, message.Text);
+
+        return Task.CompletedTask;
+    }
+}
+
+/// <summary>
+/// Handler de ejemplo registrado por DI para actualizaciones de estado de entrega — equivalente a
+/// <see cref="LoggingMessageHandler"/> pero para <see cref="IWhatsAppStatusHandler"/>. Solo loguea;
+/// en un caso real acá se actualizaría el estado de la notificación guardada en base.
+/// </summary>
+public class LoggingStatusHandler : IWhatsAppStatusHandler
+{
+    private readonly ILogger<LoggingStatusHandler> _logger;
+
+    public LoggingStatusHandler(ILogger<LoggingStatusHandler> logger)
+    {
+        _logger = logger;
+    }
+
+    public Task HandleAsync(WhatsAppMessageStatusUpdate status, CancellationToken cancellationToken = default)
+    {
+        // 🔴 PONÉ UN BREAKPOINT ACÁ para inspeccionar la actualización de estado por HANDLER DI
+        _logger.LogInformation(
+            "[DI IWhatsAppStatusHandler] Mensaje {MessageId} a {RecipientPhoneNumber}: {Status}",
+            status.MessageId, status.RecipientPhoneNumber, status.Status);
+
+        if (status.Status == WhatsAppMessageStatus.Failed)
+        {
+            _logger.LogWarning(
+                "Mensaje {MessageId} falló: code={ErrorCode} message={ErrorMessage}",
+                status.MessageId, status.ErrorCode, status.ErrorMessage);
+        }
 
         return Task.CompletedTask;
     }

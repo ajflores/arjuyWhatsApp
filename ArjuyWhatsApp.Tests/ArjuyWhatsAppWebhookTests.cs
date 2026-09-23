@@ -39,7 +39,8 @@ public class ArjuyWhatsAppWebhookTests
             factory,
             Options.Create(options),
             scopeFactory ?? BuildEmptyScopeFactory(),
-            NullLogger<ArjuyWhatsAppClient>.Instance);
+            NullLogger<ArjuyWhatsAppClient>.Instance,
+            new DefaultPhoneNumberNormalizer());
     }
 
     /// <summary>Payload real (forma verificada contra el WebhooksController de producción de ArjuyTurismo) con un único mensaje de texto entrante.</summary>

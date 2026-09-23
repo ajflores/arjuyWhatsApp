@@ -15,7 +15,10 @@ public class ArjuyWhatsAppClientTests
         {
             AccessToken = "fake-token",
             PhoneNumberId = "1234567890",
-            ApiVersion = "v21.0"
+            ApiVersion = "v21.0",
+            // Sin retry por default en los tests que no lo ejercitan explícitamente — así un test
+            // con una única respuesta de error (ej. BadGateway) no queda esperando reintentos reales.
+            MaxRetryAttempts = 0
         };
     }
 
@@ -28,13 +31,14 @@ public class ArjuyWhatsAppClientTests
         return new ServiceCollection().BuildServiceProvider().GetRequiredService<IServiceScopeFactory>();
     }
 
-    private static ArjuyWhatsAppClient BuildClient(IHttpClientFactory factory, IOptions<ArjuyWhatsAppOptions> options, IServiceScopeFactory? scopeFactory = null)
+    private static ArjuyWhatsAppClient BuildClient(IHttpClientFactory factory, IOptions<ArjuyWhatsAppOptions> options, IServiceScopeFactory? scopeFactory = null, IPhoneNumberNormalizer? phoneNumberNormalizer = null)
     {
         return new ArjuyWhatsAppClient(
             factory,
             options,
             scopeFactory ?? BuildEmptyScopeFactory(),
-            NullLogger<ArjuyWhatsAppClient>.Instance);
+            NullLogger<ArjuyWhatsAppClient>.Instance,
+            phoneNumberNormalizer ?? new DefaultPhoneNumberNormalizer());
     }
 
     [Fact]
@@ -94,8 +98,38 @@ public class ArjuyWhatsAppClientTests
 
         Assert.False(result.IsSuccess);
         Assert.NotNull(result.Message);
-        Assert.Contains("400", result.Message);
         Assert.Contains("Invalid parameter", result.Message);
+
+        Assert.NotNull(result.Error);
+        Assert.Equal(400, result.Error!.HttpStatusCode);
+        Assert.Equal(100, result.Error.Code);
+        Assert.Equal("OAuthException", result.Error.Type);
+        Assert.Equal("Invalid parameter", result.Error.Message);
+        Assert.False(result.Error.IsRateLimited);
+        Assert.False(result.Error.IsTransient);
+    }
+
+    [Fact]
+    public async Task SendTextAsync_RespuestaDeErrorNoJson_ToleraYUsaBodyCrudoComoMessage()
+    {
+        var errorBody = "<html><body>502 Bad Gateway</body></html>";
+
+        var handler = new FakeHttpMessageHandler(HttpStatusCode.BadGateway, errorBody);
+        var factory = new FakeHttpClientFactory(handler);
+        var options = Options.Create(BuildOptions());
+        var client = BuildClient(factory, options);
+
+        var result = await client.SendTextAsync("5491100000000", "Hola");
+
+        Assert.False(result.IsSuccess);
+        Assert.Equal(errorBody, result.Message);
+
+        Assert.NotNull(result.Error);
+        Assert.Equal(502, result.Error!.HttpStatusCode);
+        Assert.Equal(errorBody, result.Error.Message);
+        Assert.Equal(errorBody, result.Error.RawBody);
+        Assert.Null(result.Error.Code);
+        Assert.True(result.Error.IsTransient);
     }
 
     [Fact]
@@ -166,8 +200,11 @@ public class ArjuyWhatsAppClientTests
 
         Assert.False(result.IsSuccess);
         Assert.NotNull(result.Message);
-        Assert.Contains("400", result.Message);
         Assert.Contains("Unsupported media type", result.Message);
+
+        Assert.NotNull(result.Error);
+        Assert.Equal(400, result.Error!.HttpStatusCode);
+        Assert.Equal(100, result.Error.Code);
     }
 
     [Fact]

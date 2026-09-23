@@ -1,7 +1,7 @@
 <Window x:Class="ArjuyWhatsApp.Sample.Wpf.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="ArjuyWhatsApp — Sample WPF" Height="480" Width="520">
+        Title="ArjuyWhatsApp — Sample WPF" Height="640" Width="520">
     <Grid Margin="12">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
@@ -10,6 +10,8 @@
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="120" />
         </Grid.RowDefinitions>
         <Grid.ColumnDefinitions>
             <ColumnDefinition Width="Auto" />
@@ -48,6 +50,26 @@
                     <GridViewColumn Header="De" Width="110" DisplayMemberBinding="{Binding From}" />
                     <GridViewColumn Header="Tipo" Width="70" DisplayMemberBinding="{Binding Type}" />
                     <GridViewColumn Header="Texto" Width="180" DisplayMemberBinding="{Binding Text}" />
+                </GridView>
+            </ListView.View>
+        </ListView>
+
+        <TextBlock Grid.Row="6" Grid.Column="0" Grid.ColumnSpan="2" Margin="4,12,4,4"
+                   FontWeight="Bold" Text="Mensajes enviados (estado de entrega):" />
+
+        <!--
+            ListView bindeado a MensajesEnviados (ObservableCollection&lt;SentMessageStatus&gt;).
+            A diferencia de MensajesRecibidos, acá cada item CAMBIA después de agregado (el estado
+            pasa de "✓ enviado" a "✓✓ entregado"/"✓✓ leído" cuando llega MessageStatusUpdated) —
+            por eso SentMessageStatus implementa INotifyPropertyChanged: sin eso, el binding solo
+            reflejaría el valor inicial y nunca el ✓✓ posterior.
+        -->
+        <ListView Grid.Row="7" Grid.Column="0" Grid.ColumnSpan="2" Margin="4"
+                  ItemsSource="{Binding MensajesEnviados}">
+            <ListView.View>
+                <GridView>
+                    <GridViewColumn Header="Message id" Width="280" DisplayMemberBinding="{Binding MessageId}" />
+                    <GridViewColumn Header="Estado" Width="150" DisplayMemberBinding="{Binding Status}" />
                 </GridView>
             </ListView.View>
         </ListView>

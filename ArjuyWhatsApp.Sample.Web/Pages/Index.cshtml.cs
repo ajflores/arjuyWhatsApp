@@ -22,6 +22,9 @@ public class IndexModel : PageModel
     [BindProperty]
     public SendTextInput Input { get; set; } = new();
 
+    [BindProperty]
+    public SendConfirmationInput Confirmation { get; set; } = new();
+
     /// <summary>Resultado del último envío (éxito o error), para mostrar en la misma página tras el POST.</summary>
     public MResult<string>? SendResult { get; private set; }
 
@@ -33,6 +36,11 @@ public class IndexModel : PageModel
         public string PhoneNumber { get; set; } = string.Empty;
 
         public string Message { get; set; } = string.Empty;
+    }
+
+    public class SendConfirmationInput
+    {
+        public string PhoneNumber { get; set; } = string.Empty;
     }
 
     public void OnGet()
@@ -55,6 +63,34 @@ public class IndexModel : PageModel
         // No se hace redirect (PRG completo) a propósito: así el resultado del envío (éxito/error)
         // sigue disponible para mostrarse en la misma respuesta, sin tener que pasarlo por
         // TempData. El listado de recibidos se vuelve a leer igual, para que quede actualizado.
+        ReceivedMessages = _messageStore.GetAll();
+        return Page();
+    }
+
+    /// <summary>
+    /// Manda un mensaje interactivo con dos botones fijos ("Confirmar" / "Cancelar") — caso de uso
+    /// real de chat: confirmar una acción sin que el cliente tenga que escribir texto libre. Cuando
+    /// el destinatario toca un botón, la respuesta llega como un mensaje entrante normal (ver
+    /// <see cref="WhatsAppMessageReceived.InteractiveReplyId"/>), y <see cref="StoringMessageHandler"/>
+    /// la guarda y la muestra en la tabla de recibidos igual que cualquier otro mensaje.
+    /// </summary>
+    public async Task<IActionResult> OnPostConfirmationAsync()
+    {
+        if (string.IsNullOrWhiteSpace(Confirmation.PhoneNumber))
+        {
+            ReceivedMessages = _messageStore.GetAll();
+            return Page();
+        }
+
+        SendResult = await _whatsAppClient.SendInteractiveButtonsAsync(
+            Confirmation.PhoneNumber,
+            "¿Confirmás tu pedido?",
+            new (string Id, string Title)[]
+            {
+                ("confirmar", "Confirmar"),
+                ("cancelar", "Cancelar"),
+            });
+
         ReceivedMessages = _messageStore.GetAll();
         return Page();
     }
