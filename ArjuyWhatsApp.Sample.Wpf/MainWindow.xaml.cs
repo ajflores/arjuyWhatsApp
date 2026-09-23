@@ -1,6 +1,8 @@
 using System.Collections.ObjectModel;
 using System.ComponentModel;
+using System.IO;
 using System.Windows;
+using Microsoft.Win32;
 
 namespace ArjuyWhatsApp.Sample.Wpf;
 
@@ -184,5 +186,245 @@ public partial class MainWindow : Window
                 _ => tracked.Status
             };
         });
+    }
+
+    // -----------------------------------------------------------------------------------------
+    // Pestañas de funcionalidades (imagen, documento, audio, video, sticker, ubicación, contacto,
+    // reacción, plantillas). Cada ruta de archivo elegida se guarda en un campo propio (no en el
+    // Tag de un control, a diferencia de la sample WinForms) porque acá cada control ya tiene su
+    // x:Name fijo declarado en el XAML — no hace falta un diccionario genérico por pestaña.
+    // -----------------------------------------------------------------------------------------
+
+    private string? _imagenArchivoPath;
+    private string? _documentoArchivoPath;
+    private string? _audioArchivoPath;
+    private string? _videoArchivoPath;
+    private string? _stickerArchivoPath;
+
+    private static string? ElegirArchivo()
+    {
+        var dialog = new OpenFileDialog();
+        return dialog.ShowDialog() == true ? dialog.FileName : null;
+    }
+
+    private static string FormatResult(MResult<string> result)
+    {
+        return result.IsSuccess
+            ? $"Enviado. Message id: {result.Data}"
+            : $"Error: {result.Message}";
+    }
+
+    private static string GuessMimeType(string fileName)
+    {
+        return Path.GetExtension(fileName).ToLowerInvariant() switch
+        {
+            ".jpg" or ".jpeg" => "image/jpeg",
+            ".png" => "image/png",
+            ".webp" => "image/webp",
+            ".pdf" => "application/pdf",
+            ".doc" => "application/msword",
+            ".docx" => "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            ".mp3" => "audio/mpeg",
+            ".ogg" => "audio/ogg",
+            ".mp4" => "video/mp4",
+            _ => "application/octet-stream"
+        };
+    }
+
+    /// <summary>
+    /// Sube <paramref name="filePath"/> a Meta y, si la subida fue exitosa, ejecuta
+    /// <paramref name="send"/> con el número destino y el <c>media_id</c> resultante — mismo
+    /// mecanismo de un solo paso que <c>WhatsAppMediaController.SendMedia</c> en Sample.Api.
+    /// </summary>
+    private async Task<string> UploadAndSendAsync(string phoneNumber, string? filePath, Func<string, string, Task<MResult<string>>> send)
+    {
+        if (string.IsNullOrWhiteSpace(phoneNumber) || string.IsNullOrWhiteSpace(filePath))
+        {
+            return "Completá el número y elegí un archivo.";
+        }
+
+        var fileBytes = await File.ReadAllBytesAsync(filePath);
+        var fileName = Path.GetFileName(filePath);
+
+        var uploadResult = await _whatsAppClient.UploadMediaAsync(fileBytes, fileName, GuessMimeType(fileName));
+        if (!uploadResult.IsSuccess || uploadResult.Data is null)
+        {
+            return $"Error al subir: {uploadResult.Message}";
+        }
+
+        var sendResult = await send(phoneNumber, uploadResult.Data);
+        return FormatResult(sendResult);
+    }
+
+    private void BtnImagenElegirArchivo_Click(object sender, RoutedEventArgs e)
+    {
+        var path = ElegirArchivo();
+        if (path is null)
+        {
+            return;
+        }
+
+        _imagenArchivoPath = path;
+        lblImagenArchivo.Text = Path.GetFileName(path);
+    }
+
+    private async void BtnImagenEnviar_Click(object sender, RoutedEventArgs e)
+    {
+        txtImagenResultado.Text = "Subiendo y enviando...";
+        txtImagenResultado.Text = await UploadAndSendAsync(
+            txtImagenNumero.Text.Trim(), _imagenArchivoPath,
+            (phoneNumber, mediaId) => _whatsAppClient.SendImageByMediaIdAsync(phoneNumber, mediaId, EmptyToNull(txtImagenCaption.Text)));
+    }
+
+    private void BtnDocumentoElegirArchivo_Click(object sender, RoutedEventArgs e)
+    {
+        var path = ElegirArchivo();
+        if (path is null)
+        {
+            return;
+        }
+
+        _documentoArchivoPath = path;
+        lblDocumentoArchivo.Text = Path.GetFileName(path);
+    }
+
+    private async void BtnDocumentoEnviar_Click(object sender, RoutedEventArgs e)
+    {
+        txtDocumentoResultado.Text = "Subiendo y enviando...";
+        txtDocumentoResultado.Text = await UploadAndSendAsync(
+            txtDocumentoNumero.Text.Trim(), _documentoArchivoPath,
+            (phoneNumber, mediaId) =>
+            {
+                var nombreMostrado = txtDocumentoNombreMostrado.Text.Trim();
+                var fileName = string.IsNullOrWhiteSpace(nombreMostrado)
+                    ? Path.GetFileName(_documentoArchivoPath ?? string.Empty)
+                    : nombreMostrado;
+                return _whatsAppClient.SendDocumentByMediaIdAsync(phoneNumber, mediaId, fileName, EmptyToNull(txtDocumentoCaption.Text));
+            });
+    }
+
+    private void BtnAudioElegirArchivo_Click(object sender, RoutedEventArgs e)
+    {
+        var path = ElegirArchivo();
+        if (path is null)
+        {
+            return;
+        }
+
+        _audioArchivoPath = path;
+        lblAudioArchivo.Text = Path.GetFileName(path);
+    }
+
+    private async void BtnAudioEnviar_Click(object sender, RoutedEventArgs e)
+    {
+        txtAudioResultado.Text = "Subiendo y enviando...";
+        txtAudioResultado.Text = await UploadAndSendAsync(
+            txtAudioNumero.Text.Trim(), _audioArchivoPath,
+            (phoneNumber, mediaId) => _whatsAppClient.SendAudioByMediaIdAsync(phoneNumber, mediaId, chkAudioVoz.IsChecked == true));
+    }
+
+    private void BtnVideoElegirArchivo_Click(object sender, RoutedEventArgs e)
+    {
+        var path = ElegirArchivo();
+        if (path is null)
+        {
+            return;
+        }
+
+        _videoArchivoPath = path;
+        lblVideoArchivo.Text = Path.GetFileName(path);
+    }
+
+    private async void BtnVideoEnviar_Click(object sender, RoutedEventArgs e)
+    {
+        txtVideoResultado.Text = "Subiendo y enviando...";
+        txtVideoResultado.Text = await UploadAndSendAsync(
+            txtVideoNumero.Text.Trim(), _videoArchivoPath,
+            (phoneNumber, mediaId) => _whatsAppClient.SendVideoByMediaIdAsync(phoneNumber, mediaId, EmptyToNull(txtVideoCaption.Text)));
+    }
+
+    private void BtnStickerElegirArchivo_Click(object sender, RoutedEventArgs e)
+    {
+        var path = ElegirArchivo();
+        if (path is null)
+        {
+            return;
+        }
+
+        _stickerArchivoPath = path;
+        lblStickerArchivo.Text = Path.GetFileName(path);
+    }
+
+    private async void BtnStickerEnviar_Click(object sender, RoutedEventArgs e)
+    {
+        txtStickerResultado.Text = "Subiendo y enviando...";
+        txtStickerResultado.Text = await UploadAndSendAsync(
+            txtStickerNumero.Text.Trim(), _stickerArchivoPath,
+            (phoneNumber, mediaId) => _whatsAppClient.SendStickerByMediaIdAsync(phoneNumber, mediaId));
+    }
+
+    private async void BtnUbicacionEnviar_Click(object sender, RoutedEventArgs e)
+    {
+        if (!double.TryParse(txtUbicacionLatitud.Text.Trim(), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var latitud) ||
+            !double.TryParse(txtUbicacionLongitud.Text.Trim(), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var longitud))
+        {
+            txtUbicacionResultado.Text = "Latitud/longitud inválidas.";
+            return;
+        }
+
+        txtUbicacionResultado.Text = "Enviando...";
+        var result = await _whatsAppClient.SendLocationAsync(
+            txtUbicacionNumero.Text.Trim(), latitud, longitud,
+            EmptyToNull(txtUbicacionNombre.Text), EmptyToNull(txtUbicacionDireccion.Text));
+        txtUbicacionResultado.Text = FormatResult(result);
+    }
+
+    private async void BtnContactoEnviar_Click(object sender, RoutedEventArgs e)
+    {
+        var nombreContacto = txtContactoNombre.Text.Trim();
+        if (string.IsNullOrWhiteSpace(nombreContacto))
+        {
+            txtContactoResultado.Text = "El contacto necesita un nombre.";
+            return;
+        }
+
+        var contact = new WhatsAppContact
+        {
+            Name = new WhatsAppContactName { FormattedName = nombreContacto },
+        };
+
+        var telefonoContacto = txtContactoTelefono.Text.Trim();
+        if (!string.IsNullOrWhiteSpace(telefonoContacto))
+        {
+            contact.Phones.Add(new WhatsAppContactPhone { Phone = telefonoContacto, Type = "CELL" });
+        }
+
+        txtContactoResultado.Text = "Enviando...";
+        var result = await _whatsAppClient.SendContactsAsync(txtContactoNumero.Text.Trim(), new[] { contact });
+        txtContactoResultado.Text = FormatResult(result);
+    }
+
+    private async void BtnReaccionEnviar_Click(object sender, RoutedEventArgs e)
+    {
+        txtReaccionResultado.Text = "Enviando...";
+        var result = await _whatsAppClient.SendReactionAsync(
+            txtReaccionNumero.Text.Trim(), txtReaccionMessageId.Text.Trim(), txtReaccionEmoji.Text.Trim());
+        txtReaccionResultado.Text = FormatResult(result);
+    }
+
+    private async void BtnPlantillasListar_Click(object sender, RoutedEventArgs e)
+    {
+        txtPlantillasResultado.Text = "Consultando...";
+        var result = await _whatsAppClient.GetMessageTemplatesAsync();
+        txtPlantillasResultado.Text = result.IsSuccess
+            ? string.Join(Environment.NewLine, (result.Data ?? Array.Empty<WhatsAppMessageTemplate>())
+                .Select(template => $"{template.Name} ({template.Language}) — {template.Status}"))
+            : $"Error: {result.Message}";
+    }
+
+    private static string? EmptyToNull(string value)
+    {
+        var trimmed = value.Trim();
+        return trimmed.Length == 0 ? null : trimmed;
     }
 }

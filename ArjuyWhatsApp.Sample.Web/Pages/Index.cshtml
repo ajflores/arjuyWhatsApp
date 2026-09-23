@@ -12,7 +12,9 @@
     <div class="container">
         <h1>ArjuyWhatsApp — Sample Web</h1>
         <p class="subtitle">
-            Enviá un mensaje de texto y mirá los mensajes recibidos vía webhook (<code>/api/webhooks/whatsapp</code>).
+            Probá cada funcionalidad de <code>IArjuyWhatsAppClient</code> (texto, botones, imagen,
+            documento, audio, video, sticker, ubicación, contacto, reacción, plantillas) y mirá los
+            mensajes recibidos vía webhook (<code>/api/webhooks/whatsapp</code>).
         </p>
 
         <section class="card">
@@ -60,6 +62,212 @@
                 </div>
                 <button type="submit">Mandar confirmación</button>
             </form>
+        </section>
+
+        <section class="card">
+            <h2>Enviar imagen</h2>
+            <p class="subtitle">Se sube el archivo a Meta y se manda por <code>media_id</code> — no hace falta una URL pública.</p>
+            <form method="post" asp-page-handler="Image" enctype="multipart/form-data">
+                <div class="field">
+                    <label asp-for="Image.PhoneNumber">Número</label>
+                    <input asp-for="Image.PhoneNumber" placeholder="5491122334455" required />
+                </div>
+                <div class="field">
+                    <label asp-for="Image.File">Archivo (jpg/png/webp)</label>
+                    <input asp-for="Image.File" type="file" accept="image/*" required />
+                </div>
+                <div class="field">
+                    <label asp-for="Image.Caption">Caption (opcional)</label>
+                    <input asp-for="Image.Caption" />
+                </div>
+                <button type="submit">Subir y enviar imagen</button>
+            </form>
+        </section>
+
+        <section class="card">
+            <h2>Enviar documento</h2>
+            <p class="subtitle">Se sube el archivo a Meta y se manda por <code>media_id</code> — no hace falta una URL pública.</p>
+            <form method="post" asp-page-handler="Document" enctype="multipart/form-data">
+                <div class="field">
+                    <label asp-for="Document.PhoneNumber">Número</label>
+                    <input asp-for="Document.PhoneNumber" placeholder="5491122334455" required />
+                </div>
+                <div class="field">
+                    <label asp-for="Document.File">Archivo</label>
+                    <input asp-for="Document.File" type="file" required />
+                </div>
+                <div class="field">
+                    <label asp-for="Document.FileName">Nombre mostrado al destinatario (opcional, usa el del archivo si se deja vacío)</label>
+                    <input asp-for="Document.FileName" placeholder="reserva.pdf" />
+                </div>
+                <div class="field">
+                    <label asp-for="Document.Caption">Caption (opcional)</label>
+                    <input asp-for="Document.Caption" />
+                </div>
+                <button type="submit">Subir y enviar documento</button>
+            </form>
+        </section>
+
+        <section class="card">
+            <h2>Enviar audio</h2>
+            <p class="subtitle">Se sube el archivo a Meta y se manda por <code>media_id</code> — no hace falta una URL pública.</p>
+            <form method="post" asp-page-handler="Audio" enctype="multipart/form-data">
+                <div class="field">
+                    <label asp-for="Audio.PhoneNumber">Número</label>
+                    <input asp-for="Audio.PhoneNumber" placeholder="5491122334455" required />
+                </div>
+                <div class="field">
+                    <label asp-for="Audio.File">Archivo (ej. mp3, ogg)</label>
+                    <input asp-for="Audio.File" type="file" accept="audio/*" required />
+                </div>
+                <div class="field field-checkbox">
+                    <input asp-for="Audio.Voice" type="checkbox" />
+                    <label asp-for="Audio.Voice">Mostrar como nota de voz (requiere OGG/Opus mono)</label>
+                </div>
+                <button type="submit">Subir y enviar audio</button>
+            </form>
+        </section>
+
+        <section class="card">
+            <h2>Enviar video</h2>
+            <p class="subtitle">Se sube el archivo a Meta y se manda por <code>media_id</code> — no hace falta una URL pública.</p>
+            <form method="post" asp-page-handler="Video" enctype="multipart/form-data">
+                <div class="field">
+                    <label asp-for="Video.PhoneNumber">Número</label>
+                    <input asp-for="Video.PhoneNumber" placeholder="5491122334455" required />
+                </div>
+                <div class="field">
+                    <label asp-for="Video.File">Archivo (mp4)</label>
+                    <input asp-for="Video.File" type="file" accept="video/*" required />
+                </div>
+                <div class="field">
+                    <label asp-for="Video.Caption">Caption (opcional)</label>
+                    <input asp-for="Video.Caption" />
+                </div>
+                <button type="submit">Subir y enviar video</button>
+            </form>
+        </section>
+
+        <section class="card">
+            <h2>Enviar sticker</h2>
+            <p class="subtitle">Se sube el archivo a Meta y se manda por <code>media_id</code>. Meta exige formato WebP (estático hasta 100KB, animado hasta 500KB).</p>
+            <form method="post" asp-page-handler="Sticker" enctype="multipart/form-data">
+                <div class="field">
+                    <label asp-for="Sticker.PhoneNumber">Número</label>
+                    <input asp-for="Sticker.PhoneNumber" placeholder="5491122334455" required />
+                </div>
+                <div class="field">
+                    <label asp-for="Sticker.File">Archivo (.webp)</label>
+                    <input asp-for="Sticker.File" type="file" accept="image/webp" required />
+                </div>
+                <button type="submit">Subir y enviar sticker</button>
+            </form>
+        </section>
+
+        <section class="card">
+            <h2>Enviar ubicación</h2>
+            <form method="post" asp-page-handler="Location">
+                <div class="field">
+                    <label asp-for="Location.PhoneNumber">Número</label>
+                    <input asp-for="Location.PhoneNumber" placeholder="5491122334455" required />
+                </div>
+                <div class="field">
+                    <label asp-for="Location.Latitude">Latitud</label>
+                    <input asp-for="Location.Latitude" type="number" step="any" placeholder="-54.8019" required />
+                </div>
+                <div class="field">
+                    <label asp-for="Location.Longitude">Longitud</label>
+                    <input asp-for="Location.Longitude" type="number" step="any" placeholder="-68.3030" required />
+                </div>
+                <div class="field">
+                    <label asp-for="Location.PlaceName">Nombre del lugar (opcional)</label>
+                    <input asp-for="Location.PlaceName" placeholder="Oficina Jujuy Dev" />
+                </div>
+                <div class="field">
+                    <label asp-for="Location.Address">Dirección (opcional)</label>
+                    <input asp-for="Location.Address" />
+                </div>
+                <button type="submit">Enviar ubicación</button>
+            </form>
+        </section>
+
+        <section class="card">
+            <h2>Enviar contacto</h2>
+            <form method="post" asp-page-handler="Contact">
+                <div class="field">
+                    <label asp-for="Contact.PhoneNumber">Número destino</label>
+                    <input asp-for="Contact.PhoneNumber" placeholder="5491122334455" required />
+                </div>
+                <div class="field">
+                    <label asp-for="Contact.ContactName">Nombre del contacto a compartir</label>
+                    <input asp-for="Contact.ContactName" placeholder="Juan Pérez" required />
+                </div>
+                <div class="field">
+                    <label asp-for="Contact.ContactPhone">Teléfono del contacto (opcional)</label>
+                    <input asp-for="Contact.ContactPhone" placeholder="5491133445566" />
+                </div>
+                <button type="submit">Enviar contacto</button>
+            </form>
+        </section>
+
+        <section class="card">
+            <h2>Reaccionar a un mensaje</h2>
+            <p class="subtitle">Pasá vacío el emoji para remover una reacción existente.</p>
+            <form method="post" asp-page-handler="Reaction">
+                <div class="field">
+                    <label asp-for="Reaction.PhoneNumber">Número</label>
+                    <input asp-for="Reaction.PhoneNumber" placeholder="5491122334455" required />
+                </div>
+                <div class="field">
+                    <label asp-for="Reaction.MessageId">Message id (wamid.)</label>
+                    <input asp-for="Reaction.MessageId" placeholder="wamid...." required />
+                </div>
+                <div class="field">
+                    <label asp-for="Reaction.Emoji">Emoji</label>
+                    <input asp-for="Reaction.Emoji" placeholder="👍" />
+                </div>
+                <button type="submit">Reaccionar</button>
+            </form>
+        </section>
+
+        @if (Model.SendResult is not null)
+        {
+            if (Model.SendResult.IsSuccess)
+            {
+                <p class="result result-ok">
+                    Enviado correctamente. Message ID: <code>@Model.SendResult.Data</code>
+                </p>
+            }
+            else
+            {
+                <p class="result result-error">
+                    Error al enviar: @Model.SendResult.Message
+                </p>
+            }
+        }
+
+        <section class="card">
+            <h2>Listar plantillas aprobadas</h2>
+            <form method="post" asp-page-handler="ListTemplates">
+                <button type="submit">Listar plantillas</button>
+            </form>
+
+            @if (Model.TemplatesResult is not null)
+            {
+                if (Model.TemplatesResult.IsSuccess)
+                {
+                    <ul>
+                        @foreach (var template in Model.TemplatesResult.Data ?? Array.Empty<WhatsAppMessageTemplate>())
+                        {
+                            <li>@template.Name (@template.Language) — @template.Status</li>
+                        }
+                    </ul>
+                }
+                else
+                {
+                    <p class="result result-error">Error al listar: @Model.TemplatesResult.Message</p>
+                }
+            }
         </section>
 
         <section class="card">

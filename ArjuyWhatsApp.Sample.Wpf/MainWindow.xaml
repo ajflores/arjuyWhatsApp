@@ -1,38 +1,338 @@
 <Window x:Class="ArjuyWhatsApp.Sample.Wpf.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="ArjuyWhatsApp — Sample WPF" Height="640" Width="520">
+        Title="ArjuyWhatsApp — Sample WPF" Height="760" Width="560">
     <Grid Margin="12">
         <Grid.RowDefinitions>
-            <RowDefinition Height="Auto" />
-            <RowDefinition Height="Auto" />
-            <RowDefinition Height="Auto" />
-            <RowDefinition Height="Auto" />
+            <RowDefinition Height="290" />
             <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
             <RowDefinition Height="Auto" />
             <RowDefinition Height="120" />
         </Grid.RowDefinitions>
-        <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="Auto" />
-            <ColumnDefinition Width="*" />
-        </Grid.ColumnDefinitions>
 
-        <Label Grid.Row="0" Grid.Column="0" Content="Número destino:" VerticalAlignment="Center" />
-        <TextBox x:Name="txtNumero" Grid.Row="0" Grid.Column="1" Margin="4"
-                 Text="" ToolTip="Ej: 5491122334455" />
+        <!--
+            Una TabItem por funcionalidad de IArjuyWhatsAppClient. Texto es la única con lógica en
+            MainWindow.xaml.cs original; el resto llama UploadMediaAsync + Send*ByMediaIdAsync (para
+            imagen/documento/audio/video/sticker) o el método Send*Async directo (ubicación,
+            contacto, reacción, plantillas) — ver los handlers Btn*_Click en el code-behind.
+        -->
+        <TabControl Grid.Row="0">
+            <TabItem Header="Texto">
+                <Grid Margin="8">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                    </Grid.RowDefinitions>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="150" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
 
-        <Label Grid.Row="1" Grid.Column="0" Content="Mensaje:" VerticalAlignment="Center" />
-        <TextBox x:Name="txtMensaje" Grid.Row="1" Grid.Column="1" Margin="4" />
+                    <Label Grid.Row="0" Grid.Column="0" Content="Número destino:" VerticalAlignment="Center" />
+                    <TextBox x:Name="txtNumero" Grid.Row="0" Grid.Column="1" Margin="4" ToolTip="Ej: 5491122334455" />
 
-        <Button x:Name="btnEnviar" Grid.Row="2" Grid.Column="1" Margin="4" Padding="8,4"
-                HorizontalAlignment="Left" Content="Enviar" Click="btnEnviar_Click" />
+                    <Label Grid.Row="1" Grid.Column="0" Content="Mensaje:" VerticalAlignment="Center" />
+                    <TextBox x:Name="txtMensaje" Grid.Row="1" Grid.Column="1" Margin="4" />
 
-        <TextBlock x:Name="lblResultado" Grid.Row="3" Grid.Column="0" Grid.ColumnSpan="2"
-                   Margin="4" TextWrapping="Wrap" />
+                    <Button x:Name="btnEnviar" Grid.Row="2" Grid.Column="1" Margin="4" Padding="8,4"
+                            HorizontalAlignment="Left" Content="Enviar" Click="btnEnviar_Click" />
 
-        <TextBlock Grid.Row="4" Grid.Column="0" Grid.ColumnSpan="2" Margin="4,12,4,4"
-                   FontWeight="Bold" Text="Mensajes recibidos (webhook):" />
+                    <TextBlock x:Name="lblResultado" Grid.Row="3" Grid.Column="0" Grid.ColumnSpan="2"
+                               Margin="4" TextWrapping="Wrap" />
+                </Grid>
+            </TabItem>
+
+            <TabItem Header="Imagen">
+                <Grid Margin="8">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                    </Grid.RowDefinitions>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="150" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+
+                    <Label Grid.Row="0" Grid.Column="0" Content="Número destino:" VerticalAlignment="Center" />
+                    <TextBox x:Name="txtImagenNumero" Grid.Row="0" Grid.Column="1" Margin="4" ToolTip="Ej: 5491122334455" />
+
+                    <Label Grid.Row="1" Grid.Column="0" Content="Archivo:" VerticalAlignment="Center" />
+                    <StackPanel Grid.Row="1" Grid.Column="1" Orientation="Horizontal" Margin="4">
+                        <Button Content="Elegir archivo..." Padding="6,2" Click="BtnImagenElegirArchivo_Click" />
+                        <TextBlock x:Name="lblImagenArchivo" VerticalAlignment="Center" Margin="8,0,0,0" Text="(ninguno)" />
+                    </StackPanel>
+
+                    <Label Grid.Row="2" Grid.Column="0" Content="Caption (opcional):" VerticalAlignment="Center" />
+                    <TextBox x:Name="txtImagenCaption" Grid.Row="2" Grid.Column="1" Margin="4" />
+
+                    <Button Grid.Row="3" Grid.Column="1" Content="Subir y enviar imagen" HorizontalAlignment="Left"
+                            Padding="8,4" Margin="4" Click="BtnImagenEnviar_Click" />
+
+                    <TextBlock x:Name="txtImagenResultado" Grid.Row="4" Grid.Column="0" Grid.ColumnSpan="2"
+                               Margin="4" TextWrapping="Wrap" />
+                </Grid>
+            </TabItem>
+
+            <TabItem Header="Documento">
+                <Grid Margin="8">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                    </Grid.RowDefinitions>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="150" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+
+                    <Label Grid.Row="0" Grid.Column="0" Content="Número destino:" VerticalAlignment="Center" />
+                    <TextBox x:Name="txtDocumentoNumero" Grid.Row="0" Grid.Column="1" Margin="4" ToolTip="Ej: 5491122334455" />
+
+                    <Label Grid.Row="1" Grid.Column="0" Content="Archivo:" VerticalAlignment="Center" />
+                    <StackPanel Grid.Row="1" Grid.Column="1" Orientation="Horizontal" Margin="4">
+                        <Button Content="Elegir archivo..." Padding="6,2" Click="BtnDocumentoElegirArchivo_Click" />
+                        <TextBlock x:Name="lblDocumentoArchivo" VerticalAlignment="Center" Margin="8,0,0,0" Text="(ninguno)" />
+                    </StackPanel>
+
+                    <Label Grid.Row="2" Grid.Column="0" Content="Nombre mostrado (opcional):" VerticalAlignment="Center" />
+                    <TextBox x:Name="txtDocumentoNombreMostrado" Grid.Row="2" Grid.Column="1" Margin="4" />
+
+                    <Label Grid.Row="3" Grid.Column="0" Content="Caption (opcional):" VerticalAlignment="Center" />
+                    <TextBox x:Name="txtDocumentoCaption" Grid.Row="3" Grid.Column="1" Margin="4" />
+
+                    <Button Grid.Row="4" Grid.Column="1" Content="Subir y enviar documento" HorizontalAlignment="Left"
+                            Padding="8,4" Margin="4" Click="BtnDocumentoEnviar_Click" />
+
+                    <TextBlock x:Name="txtDocumentoResultado" Grid.Row="5" Grid.Column="0" Grid.ColumnSpan="2"
+                               Margin="4" TextWrapping="Wrap" />
+                </Grid>
+            </TabItem>
+
+            <TabItem Header="Audio">
+                <Grid Margin="8">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                    </Grid.RowDefinitions>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="150" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+
+                    <Label Grid.Row="0" Grid.Column="0" Content="Número destino:" VerticalAlignment="Center" />
+                    <TextBox x:Name="txtAudioNumero" Grid.Row="0" Grid.Column="1" Margin="4" ToolTip="Ej: 5491122334455" />
+
+                    <Label Grid.Row="1" Grid.Column="0" Content="Archivo:" VerticalAlignment="Center" />
+                    <StackPanel Grid.Row="1" Grid.Column="1" Orientation="Horizontal" Margin="4">
+                        <Button Content="Elegir archivo..." Padding="6,2" Click="BtnAudioElegirArchivo_Click" />
+                        <TextBlock x:Name="lblAudioArchivo" VerticalAlignment="Center" Margin="8,0,0,0" Text="(ninguno)" />
+                    </StackPanel>
+
+                    <Label Grid.Row="2" Grid.Column="0" Content="Nota de voz:" VerticalAlignment="Center" />
+                    <CheckBox x:Name="chkAudioVoz" Grid.Row="2" Grid.Column="1" Margin="4" VerticalAlignment="Center"
+                              ToolTip="Requiere OGG/Opus mono" />
+
+                    <Button Grid.Row="3" Grid.Column="1" Content="Subir y enviar audio" HorizontalAlignment="Left"
+                            Padding="8,4" Margin="4" Click="BtnAudioEnviar_Click" />
+
+                    <TextBlock x:Name="txtAudioResultado" Grid.Row="4" Grid.Column="0" Grid.ColumnSpan="2"
+                               Margin="4" TextWrapping="Wrap" />
+                </Grid>
+            </TabItem>
+
+            <TabItem Header="Video">
+                <Grid Margin="8">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                    </Grid.RowDefinitions>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="150" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+
+                    <Label Grid.Row="0" Grid.Column="0" Content="Número destino:" VerticalAlignment="Center" />
+                    <TextBox x:Name="txtVideoNumero" Grid.Row="0" Grid.Column="1" Margin="4" ToolTip="Ej: 5491122334455" />
+
+                    <Label Grid.Row="1" Grid.Column="0" Content="Archivo:" VerticalAlignment="Center" />
+                    <StackPanel Grid.Row="1" Grid.Column="1" Orientation="Horizontal" Margin="4">
+                        <Button Content="Elegir archivo..." Padding="6,2" Click="BtnVideoElegirArchivo_Click" />
+                        <TextBlock x:Name="lblVideoArchivo" VerticalAlignment="Center" Margin="8,0,0,0" Text="(ninguno)" />
+                    </StackPanel>
+
+                    <Label Grid.Row="2" Grid.Column="0" Content="Caption (opcional):" VerticalAlignment="Center" />
+                    <TextBox x:Name="txtVideoCaption" Grid.Row="2" Grid.Column="1" Margin="4" />
+
+                    <Button Grid.Row="3" Grid.Column="1" Content="Subir y enviar video" HorizontalAlignment="Left"
+                            Padding="8,4" Margin="4" Click="BtnVideoEnviar_Click" />
+
+                    <TextBlock x:Name="txtVideoResultado" Grid.Row="4" Grid.Column="0" Grid.ColumnSpan="2"
+                               Margin="4" TextWrapping="Wrap" />
+                </Grid>
+            </TabItem>
+
+            <TabItem Header="Sticker">
+                <Grid Margin="8">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                    </Grid.RowDefinitions>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="150" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+
+                    <Label Grid.Row="0" Grid.Column="0" Content="Número destino:" VerticalAlignment="Center" />
+                    <TextBox x:Name="txtStickerNumero" Grid.Row="0" Grid.Column="1" Margin="4" ToolTip="Ej: 5491122334455" />
+
+                    <Label Grid.Row="1" Grid.Column="0" Content="Archivo (.webp):" VerticalAlignment="Center" />
+                    <StackPanel Grid.Row="1" Grid.Column="1" Orientation="Horizontal" Margin="4">
+                        <Button Content="Elegir archivo..." Padding="6,2" Click="BtnStickerElegirArchivo_Click" />
+                        <TextBlock x:Name="lblStickerArchivo" VerticalAlignment="Center" Margin="8,0,0,0" Text="(ninguno)" />
+                    </StackPanel>
+
+                    <Button Grid.Row="2" Grid.Column="1" Content="Subir y enviar sticker" HorizontalAlignment="Left"
+                            Padding="8,4" Margin="4" Click="BtnStickerEnviar_Click" />
+
+                    <TextBlock x:Name="txtStickerResultado" Grid.Row="3" Grid.Column="0" Grid.ColumnSpan="2"
+                               Margin="4" TextWrapping="Wrap" />
+                </Grid>
+            </TabItem>
+
+            <TabItem Header="Ubicación">
+                <Grid Margin="8">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                    </Grid.RowDefinitions>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="150" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+
+                    <Label Grid.Row="0" Grid.Column="0" Content="Número destino:" VerticalAlignment="Center" />
+                    <TextBox x:Name="txtUbicacionNumero" Grid.Row="0" Grid.Column="1" Margin="4" ToolTip="Ej: 5491122334455" />
+
+                    <Label Grid.Row="1" Grid.Column="0" Content="Latitud:" VerticalAlignment="Center" />
+                    <TextBox x:Name="txtUbicacionLatitud" Grid.Row="1" Grid.Column="1" Margin="4" ToolTip="Ej: -54.8019" />
+
+                    <Label Grid.Row="2" Grid.Column="0" Content="Longitud:" VerticalAlignment="Center" />
+                    <TextBox x:Name="txtUbicacionLongitud" Grid.Row="2" Grid.Column="1" Margin="4" ToolTip="Ej: -68.3030" />
+
+                    <Label Grid.Row="3" Grid.Column="0" Content="Nombre (opcional):" VerticalAlignment="Center" />
+                    <TextBox x:Name="txtUbicacionNombre" Grid.Row="3" Grid.Column="1" Margin="4" />
+
+                    <Label Grid.Row="4" Grid.Column="0" Content="Dirección (opcional):" VerticalAlignment="Center" />
+                    <TextBox x:Name="txtUbicacionDireccion" Grid.Row="4" Grid.Column="1" Margin="4" />
+
+                    <Button Grid.Row="5" Grid.Column="1" Content="Enviar ubicación" HorizontalAlignment="Left"
+                            Padding="8,4" Margin="4" Click="BtnUbicacionEnviar_Click" />
+
+                    <TextBlock x:Name="txtUbicacionResultado" Grid.Row="6" Grid.Column="0" Grid.ColumnSpan="2"
+                               Margin="4" TextWrapping="Wrap" />
+                </Grid>
+            </TabItem>
+
+            <TabItem Header="Contacto">
+                <Grid Margin="8">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                    </Grid.RowDefinitions>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="150" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+
+                    <Label Grid.Row="0" Grid.Column="0" Content="Número destino:" VerticalAlignment="Center" />
+                    <TextBox x:Name="txtContactoNumero" Grid.Row="0" Grid.Column="1" Margin="4" ToolTip="Ej: 5491122334455" />
+
+                    <Label Grid.Row="1" Grid.Column="0" Content="Nombre del contacto:" VerticalAlignment="Center" />
+                    <TextBox x:Name="txtContactoNombre" Grid.Row="1" Grid.Column="1" Margin="4" />
+
+                    <Label Grid.Row="2" Grid.Column="0" Content="Teléfono (opcional):" VerticalAlignment="Center" />
+                    <TextBox x:Name="txtContactoTelefono" Grid.Row="2" Grid.Column="1" Margin="4" />
+
+                    <Button Grid.Row="3" Grid.Column="1" Content="Enviar contacto" HorizontalAlignment="Left"
+                            Padding="8,4" Margin="4" Click="BtnContactoEnviar_Click" />
+
+                    <TextBlock x:Name="txtContactoResultado" Grid.Row="4" Grid.Column="0" Grid.ColumnSpan="2"
+                               Margin="4" TextWrapping="Wrap" />
+                </Grid>
+            </TabItem>
+
+            <TabItem Header="Reacción">
+                <Grid Margin="8">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                    </Grid.RowDefinitions>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="150" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+
+                    <Label Grid.Row="0" Grid.Column="0" Content="Número destino:" VerticalAlignment="Center" />
+                    <TextBox x:Name="txtReaccionNumero" Grid.Row="0" Grid.Column="1" Margin="4" ToolTip="Ej: 5491122334455" />
+
+                    <Label Grid.Row="1" Grid.Column="0" Content="Message id (wamid.):" VerticalAlignment="Center" />
+                    <TextBox x:Name="txtReaccionMessageId" Grid.Row="1" Grid.Column="1" Margin="4" />
+
+                    <Label Grid.Row="2" Grid.Column="0" Content="Emoji (vacío = remover):" VerticalAlignment="Center" />
+                    <TextBox x:Name="txtReaccionEmoji" Grid.Row="2" Grid.Column="1" Margin="4" ToolTip="👍" />
+
+                    <Button Grid.Row="3" Grid.Column="1" Content="Reaccionar" HorizontalAlignment="Left"
+                            Padding="8,4" Margin="4" Click="BtnReaccionEnviar_Click" />
+
+                    <TextBlock x:Name="txtReaccionResultado" Grid.Row="4" Grid.Column="0" Grid.ColumnSpan="2"
+                               Margin="4" TextWrapping="Wrap" />
+                </Grid>
+            </TabItem>
+
+            <TabItem Header="Plantillas">
+                <Grid Margin="8">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                    </Grid.RowDefinitions>
+
+                    <Button Grid.Row="0" Content="Listar plantillas aprobadas" HorizontalAlignment="Left"
+                            Padding="8,4" Margin="4" Click="BtnPlantillasListar_Click" />
+
+                    <TextBlock x:Name="txtPlantillasResultado" Grid.Row="1" Margin="4" TextWrapping="Wrap" />
+                </Grid>
+            </TabItem>
+        </TabControl>
+
+        <TextBlock Grid.Row="1" Margin="4,12,4,4" FontWeight="Bold" Text="Mensajes recibidos (webhook):" />
 
         <!--
             ListView bindeado a MensajesRecibidos (ObservableCollection&lt;WhatsAppMessageReceived&gt;)
@@ -41,8 +341,7 @@
             solo se toca desde el Dispatcher thread (ver OnMessageReceived en el code-behind), así
             que este binding siempre corre en el thread correcto.
         -->
-        <ListView Grid.Row="5" Grid.Column="0" Grid.ColumnSpan="2" Margin="4"
-                  ItemsSource="{Binding MensajesRecibidos}">
+        <ListView Grid.Row="2" Margin="4" ItemsSource="{Binding MensajesRecibidos}">
             <ListView.View>
                 <GridView>
                     <GridViewColumn Header="Hora" Width="70"
@@ -54,8 +353,7 @@
             </ListView.View>
         </ListView>
 
-        <TextBlock Grid.Row="6" Grid.Column="0" Grid.ColumnSpan="2" Margin="4,12,4,4"
-                   FontWeight="Bold" Text="Mensajes enviados (estado de entrega):" />
+        <TextBlock Grid.Row="3" Margin="4,12,4,4" FontWeight="Bold" Text="Mensajes enviados (estado de entrega):" />
 
         <!--
             ListView bindeado a MensajesEnviados (ObservableCollection&lt;SentMessageStatus&gt;).
@@ -64,8 +362,7 @@
             por eso SentMessageStatus implementa INotifyPropertyChanged: sin eso, el binding solo
             reflejaría el valor inicial y nunca el ✓✓ posterior.
         -->
-        <ListView Grid.Row="7" Grid.Column="0" Grid.ColumnSpan="2" Margin="4"
-                  ItemsSource="{Binding MensajesEnviados}">
+        <ListView Grid.Row="4" Margin="4" ItemsSource="{Binding MensajesEnviados}">
             <ListView.View>
                 <GridView>
                     <GridViewColumn Header="Message id" Width="280" DisplayMemberBinding="{Binding MessageId}" />

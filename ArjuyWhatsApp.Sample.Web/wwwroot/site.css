@@ -60,6 +60,21 @@ h2 {
     font-family: inherit;
 }
 
+.field-checkbox {
+    flex-direction: row;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.field-checkbox input {
+    width: auto;
+}
+
+.field-checkbox label {
+    margin-bottom: 0;
+    font-weight: normal;
+}
+
 button,
 .button-link {
     background: #25d366;

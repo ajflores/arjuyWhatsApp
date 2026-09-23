@@ -28,6 +28,8 @@ namespace ArjuyWhatsApp.Sample.WinForms
         /// </summary>
         private void InitializeComponent()
         {
+            this.tabFuncionalidades = new System.Windows.Forms.TabControl();
+            this.tabTexto = new System.Windows.Forms.TabPage();
             this.lblNumero = new System.Windows.Forms.Label();
             this.txtNumero = new System.Windows.Forms.TextBox();
             this.lblMensaje = new System.Windows.Forms.Label();
@@ -38,6 +40,8 @@ namespace ArjuyWhatsApp.Sample.WinForms
             this.lstMensajes = new System.Windows.Forms.ListBox();
             this.lblEnviados = new System.Windows.Forms.Label();
             this.lstEnviados = new System.Windows.Forms.ListBox();
+            this.tabFuncionalidades.SuspendLayout();
+            this.tabTexto.SuspendLayout();
             this.SuspendLayout();
             //
             // lblNumero
@@ -54,7 +58,7 @@ namespace ArjuyWhatsApp.Sample.WinForms
             this.txtNumero.Location = new System.Drawing.Point(140, 12);
             this.txtNumero.Name = "txtNumero";
             this.txtNumero.PlaceholderText = "Ej: 5491122334455";
-            this.txtNumero.Size = new System.Drawing.Size(300, 23);
+            this.txtNumero.Size = new System.Drawing.Size(260, 23);
             this.txtNumero.TabIndex = 1;
             //
             // lblMensaje
@@ -70,7 +74,7 @@ namespace ArjuyWhatsApp.Sample.WinForms
             //
             this.txtMensaje.Location = new System.Drawing.Point(140, 44);
             this.txtMensaje.Name = "txtMensaje";
-            this.txtMensaje.Size = new System.Drawing.Size(300, 23);
+            this.txtMensaje.Size = new System.Drawing.Size(260, 23);
             this.txtMensaje.TabIndex = 3;
             //
             // btnEnviar
@@ -83,19 +87,48 @@ namespace ArjuyWhatsApp.Sample.WinForms
             this.btnEnviar.UseVisualStyleBackColor = true;
             this.btnEnviar.Click += new System.EventHandler(this.btnEnviar_Click);
             //
-            // lblResultado
+            // lblResultado (dentro de tabTexto)
             //
             this.lblResultado.AutoSize = false;
             this.lblResultado.Location = new System.Drawing.Point(12, 112);
             this.lblResultado.Name = "lblResultado";
-            this.lblResultado.Size = new System.Drawing.Size(428, 40);
+            this.lblResultado.Size = new System.Drawing.Size(388, 40);
             this.lblResultado.TabIndex = 5;
+            //
+            // tabTexto
+            //
+            this.tabTexto.Controls.Add(this.lblResultado);
+            this.tabTexto.Controls.Add(this.btnEnviar);
+            this.tabTexto.Controls.Add(this.txtMensaje);
+            this.tabTexto.Controls.Add(this.lblMensaje);
+            this.tabTexto.Controls.Add(this.txtNumero);
+            this.tabTexto.Controls.Add(this.lblNumero);
+            this.tabTexto.Location = new System.Drawing.Point(4, 24);
+            this.tabTexto.Name = "tabTexto";
+            this.tabTexto.Padding = new System.Windows.Forms.Padding(3);
+            this.tabTexto.Size = new System.Drawing.Size(420, 220);
+            this.tabTexto.TabIndex = 0;
+            this.tabTexto.Text = "Texto";
+            this.tabTexto.UseVisualStyleBackColor = true;
+            //
+            // tabFuncionalidades
+            //
+            // Las demás TabPage (imagen, documento, audio, video, sticker, ubicación, contacto,
+            // reacción, plantillas) se agregan por código desde Form1.BuildFeatureTabs() — con esa
+            // cantidad de campos por pestaña, armarlas a mano acá con coordenadas absolutas sería
+            // imposible de mantener sin el diseñador visual.
+            this.tabFuncionalidades.Controls.Add(this.tabTexto);
+            this.tabFuncionalidades.Location = new System.Drawing.Point(12, 12);
+            this.tabFuncionalidades.Name = "tabFuncionalidades";
+            this.tabFuncionalidades.SelectedIndex = 0;
+            this.tabFuncionalidades.Size = new System.Drawing.Size(428, 248);
+            this.tabFuncionalidades.TabIndex = 10;
             //
             // lblEnviados
             //
             this.lblEnviados.AutoSize = true;
             this.lblEnviados.Font = new System.Drawing.Font("Segoe UI", 9F, System.Drawing.FontStyle.Bold);
-            this.lblEnviados.Location = new System.Drawing.Point(12, 160);
+            this.lblEnviados.Location = new System.Drawing.Point(12, 268);
             this.lblEnviados.Name = "lblEnviados";
             this.lblEnviados.Size = new System.Drawing.Size(160, 15);
             this.lblEnviados.TabIndex = 6;
@@ -110,16 +143,16 @@ namespace ArjuyWhatsApp.Sample.WinForms
             this.lstEnviados.FormattingEnabled = true;
             this.lstEnviados.HorizontalScrollbar = true;
             this.lstEnviados.ItemHeight = 15;
-            this.lstEnviados.Location = new System.Drawing.Point(12, 182);
+            this.lstEnviados.Location = new System.Drawing.Point(12, 290);
             this.lstEnviados.Name = "lstEnviados";
-            this.lstEnviados.Size = new System.Drawing.Size(428, 120);
+            this.lstEnviados.Size = new System.Drawing.Size(428, 100);
             this.lstEnviados.TabIndex = 7;
             //
             // lblRecibidos
             //
             this.lblRecibidos.AutoSize = true;
             this.lblRecibidos.Font = new System.Drawing.Font("Segoe UI", 9F, System.Drawing.FontStyle.Bold);
-            this.lblRecibidos.Location = new System.Drawing.Point(12, 312);
+            this.lblRecibidos.Location = new System.Drawing.Point(12, 400);
             this.lblRecibidos.Name = "lblRecibidos";
             this.lblRecibidos.Size = new System.Drawing.Size(179, 15);
             this.lblRecibidos.TabIndex = 8;
@@ -130,34 +163,34 @@ namespace ArjuyWhatsApp.Sample.WinForms
             this.lstMensajes.FormattingEnabled = true;
             this.lstMensajes.HorizontalScrollbar = true;
             this.lstMensajes.ItemHeight = 15;
-            this.lstMensajes.Location = new System.Drawing.Point(12, 334);
+            this.lstMensajes.Location = new System.Drawing.Point(12, 422);
             this.lstMensajes.Name = "lstMensajes";
-            this.lstMensajes.Size = new System.Drawing.Size(428, 244);
+            this.lstMensajes.Size = new System.Drawing.Size(428, 180);
             this.lstMensajes.TabIndex = 9;
             //
             // Form1
             //
             this.AutoScaleDimensions = new System.Drawing.SizeF(7F, 15F);
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
-            this.ClientSize = new System.Drawing.Size(452, 590);
+            this.ClientSize = new System.Drawing.Size(452, 614);
             this.Controls.Add(this.lstMensajes);
             this.Controls.Add(this.lblRecibidos);
             this.Controls.Add(this.lstEnviados);
             this.Controls.Add(this.lblEnviados);
-            this.Controls.Add(this.lblResultado);
-            this.Controls.Add(this.btnEnviar);
-            this.Controls.Add(this.txtMensaje);
-            this.Controls.Add(this.lblMensaje);
-            this.Controls.Add(this.txtNumero);
-            this.Controls.Add(this.lblNumero);
+            this.Controls.Add(this.tabFuncionalidades);
             this.Name = "Form1";
             this.Text = "ArjuyWhatsApp — Sample WinForms";
+            this.tabTexto.ResumeLayout(false);
+            this.tabTexto.PerformLayout();
+            this.tabFuncionalidades.ResumeLayout(false);
             this.ResumeLayout(false);
             this.PerformLayout();
         }
 
         #endregion
 
+        private System.Windows.Forms.TabControl tabFuncionalidades;
+        private System.Windows.Forms.TabPage tabTexto;
         private System.Windows.Forms.Label lblNumero;
         private System.Windows.Forms.TextBox txtNumero;
         private System.Windows.Forms.Label lblMensaje;
