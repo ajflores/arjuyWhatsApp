@@ -2,13 +2,25 @@ namespace ArjuyWhatsApp;
 
 /// <summary>
 /// Normalizador de números de teléfono argentinos al formato exacto que exige la WhatsApp Cloud
-/// API de Meta para celulares: código de país <c>54</c> + <c>9</c> + número nacional significativo
-/// de 10 dígitos (código de área + abonado, sin el <c>0</c> de prefijo troncal ni el <c>15</c> de
-/// marcado local de celular). Ejemplo: un número que un usuario podría escribir como
-/// <c>"011 15-1234-5678"</c> (CABA, formato local) se normaliza a <c>"5491123456781"</c> — el
-/// <c>9</c> va INMEDIATAMENTE DESPUÉS del código de país, nunca al final ni reemplazando al
-/// <c>15</c> en su lugar original.
+/// API de Meta para celulares: código de país <c>54</c> + número nacional significativo de 10
+/// dígitos (código de área + abonado, sin el <c>0</c> de prefijo troncal ni el <c>15</c> de marcado
+/// local de celular) — SIN el <c>9</c> de prefijo móvil. Ejemplo: un número que un usuario podría
+/// escribir como <c>"011 15-1234-5678"</c> (CABA, formato local, o incluso <c>"+54 9 11
+/// 1234-5678"</c>, el formato "humano" que usa la app de WhatsApp) se normaliza a
+/// <c>"541123456781"</c>.
 /// </summary>
+/// <remarks>
+/// <para>
+/// <b>Ojo con el "9":</b> a diferencia de la vieja API On-Premise (y del formato que la propia app
+/// de WhatsApp le muestra al usuario, que SÍ lleva el <c>9</c> después del código de país para
+/// celulares argentinos), la Cloud API de Meta rechaza el envío si el campo <c>to</c> incluye ese
+/// <c>9</c> — lo trata como un número distinto, no en la lista de destinatarios permitidos
+/// (error <c>131030</c> en modo de prueba). Verificado contra el propio panel de prueba de Meta
+/// for Developers: el <c>curl</c> de ejemplo que Meta genera para su número de prueba usa el
+/// número SIN el <c>9</c> (ej. <c>"to": "543885191909"</c>), no con él. Esta clase por eso
+/// **remueve** cualquier <c>9</c> de prefijo móvil que venga en el input, en vez de agregarlo.
+/// </para>
+/// </remarks>
 /// <remarks>
 /// <para>
 /// Esta clase asume que TODO número que recibe es un celular (WhatsApp Business API solo tiene
@@ -73,7 +85,7 @@ public class ArgentinaPhoneNumberNormalizer : IPhoneNumberNormalizer
 
         digits = StripLocalMobileTrunkIfPresent(digits);
 
-        return $"{CountryCode}{MobilePrefix}{digits}";
+        return $"{CountryCode}{digits}";
     }
 
     /// <summary>
