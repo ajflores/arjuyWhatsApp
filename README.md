@@ -256,3 +256,7 @@ primeras candidatas para una futura iteración:
   para el webhook (puerto 7300).
 - `ArjuyWhatsApp.Sample.Wpf/` — sample de escritorio (WPF) con host Kestrel embebido para el webhook
   (puerto 7200).
+
+---
+
+Si esta librería te resultó útil, una ⭐ en el repo ayuda más de lo que parece.
